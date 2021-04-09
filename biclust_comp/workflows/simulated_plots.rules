@@ -1,0 +1,431 @@
+localrules: matrix_heatmap
+
+rule main_accuracy_plots:
+    input:
+        expand("plots/simulated_accuracy/factor_info/sparsity_{metric}_thresh_{thresh}.pdf",
+               metric=['num_samples', 'num_genes', 'num_total'],
+               thresh=['', 'theoretical']),
+        expand("plots/simulated_accuracy/compare_{aspect}_clust_err_{K_choice}_K_init{failures}.pdf",
+               aspect=['LARGE', 'SPARSITY', 'NOISE', 'SIZE', 'OTHER_K', 'SIMPLE', 'SHIFT_SCALE'],
+               K_choice=['best_mean', 'best_theoretical'],
+               failures=['', '_failures']),
+        expand("plots/simulated_accuracy/summary_{metric}_{K_choice}_K_init{failures}.pdf",
+               metric=['clust_err', 'recon_error_normalised'],
+               K_choice=['best_mean', 'best_theoretical'],
+               failures=['', '_failures']),
+        expand("plots/simulated_accuracy/compare_{aspect}_clust_err_{K_choice}_K_init{failures}.pdf",
+               aspect=['SPARSITY'],
+               K_choice=['best_mean', 'best_theoretical'],
+               failures=['', '_failures']),
+        "plots/simulated_accuracy/comp_reqs_s.pdf",
+        "plots/simulated_accuracy/comp_reqs_s_full.pdf",
+        "plots/simulated_accuracy/threshold_redundancy_mean_lines.pdf",
+        "plots/simulated_accuracy/threshold_adjusted_redundancy_mean_lines.pdf",
+        "plots/simulated_accuracy/threshold_recon_error_normalised_lines.pdf",
+        "plots/simulated_accuracy/threshold_clust_err_lines.pdf",
+        "plots/simulated_accuracy/best_mean_K_init_100_100.pdf",
+        "plots/simulated_accuracy/best_mean_K_init_500_500.pdf",
+        "plots/simulated_accuracy/recovery/binned_recovery_scores_SPARSITY.pdf",
+        "plots/simulated_accuracy/recovery/binned_recovery_scores_BASE.pdf",
+        "plots/simulated_accuracy/recovery/binned_recovery_scores_factors_dist_SPARSITY.pdf",
+        "plots/simulated_accuracy/recovery/binned_relevance_scores_factors_dist_SPARSITY.pdf",
+        "plots/simulated_accuracy/recovery/binned_relevance_scores_factors_dist_rec_SPARSITY.pdf",
+        "plots/simulated_accuracy/restricted_mean_max_overlap.pdf",
+        "plots/simulated_accuracy/restricted_mean_mean_overlap.pdf",
+        "plots/simulated_accuracy/K_recovery_restricted.pdf",
+        "analysis/latex_tables/simulated/restricted_failures_latex.txt",
+        "analysis/latex_tables/simulated/thresholded_failures_latex.txt",
+
+rule comp_K_accuracy_plots:
+    input:
+        "plots/simulated_accuracy/K_init_robustness.pdf",
+        expand("plots/simulated_accuracy/K_init_robustness_{K}.pdf",
+               K=[5,10,20,50,70]),
+        "plots/simulated_accuracy/K_against_clust_err_K_SWEEP.pdf",
+        "plots/simulated_accuracy/K_recovery_best_100_K_SWEEP.pdf",
+        "plots/simulated_accuracy/comp_reqs_s_against_K_K_SWEEP.pdf",
+        expand("plots/simulated_accuracy/compare_{aspect}_clust_err_{K_choice}_K_init{failures}.pdf",
+               aspect=['K_SWEEP'],
+               K_choice=['best_mean', 'best_theoretical'],
+               failures=['', '_failures']),
+
+rule combined_plots:
+    input:
+        "analysis/latex_tables/combined/summarised_results.txt",
+        "plots/combined/summary_recon_error_normalised.pdf",
+
+rule param_sweep_plots:
+    input:
+        "analysis/accuracy/all_results_expected_PARAM_SWEEP.csv",
+        "analysis/accuracy/snakemake_config_param_sweep.log",
+    output:
+        expand("plots/param_sweep/{method}_{measure}.png",
+               method=['BicMix',
+                       'BicMix_qnorm_0',
+                       'nsNMF',
+                       'SSLB',
+                       'SDA',
+                       'SNMF',
+                       'FABIA',
+                       'FABIA_spz_1.5'],
+               measure=['CE', 'NRE']),
+        "plots/param_sweep/Plaid_CE.png",
+        "plots/param_sweep/SDA_conv_crit_s.png",
+        "plots/param_sweep/SDA_step_size_s.png",
+    shell:
+        "python biclust_comp/analysis/param_sweep.py"
+
+rule plot_thresholds:
+    input:
+        df="analysis/accuracy/all_results_expected.csv",
+    wildcard_constraints:
+        failures="_failures|",
+    output:
+        summary_pdf="plots/simulated_accuracy/threshold{failures}_{metric}.pdf",
+        lines_pdf="plots/simulated_accuracy/threshold{failures}_{metric}_lines.pdf",
+        df="analysis/accuracy/threshold{failures}_{metric}.csv",
+        lines_df="analysis/accuracy/threshold{failures}_{metric}_lines.csv"
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+        import biclust_comp.analysis.simulated_plots as sim_plots
+        combined_error = pd.read_csv(input.df, index_col=None)
+        if wildcards.metric == 'adjusted_redundancy_mean':
+            combined_error['adjusted_redundancy_mean'] = acc_utils.calculate_adjusted_mean_redundancy(combined_error)
+
+        if wildcards.failures == '_failures':
+            include_failures = True
+        else:
+            include_failures = False
+
+        df, df_lines = sim_plots.plot_thresholds(error_df=combined_error,
+                                                 param_to_plot=wildcards.metric,
+                                                 filename_lines=output.lines_pdf,
+                                                 filename=output.summary_pdf,
+                                                 include_failures=include_failures)
+        df.to_csv(output.df)
+        df_lines.to_csv(output.lines_df)
+
+rule plot_K_init_clust_err:
+    input:
+        df="analysis/accuracy/all_results_expected.csv",
+    output:
+        pdf="plots/simulated_accuracy/K_init_clust_err{processing}.pdf",
+        df="analysis/accuracy/K_init_clust_err{processing}.csv"
+    run:
+        import biclust_comp.analysis.simulated_plots as sim_plots
+        df_to_plot = sim_plots.plot_K_init_clust_err(error_df_file=input.df,
+                                                     filename=output.pdf,
+                                                     processing=wildcards.processing)
+        df_to_plot.to_csv(output.df)
+
+rule plot_best_mean_K_init:
+    input:
+        df="analysis/accuracy/thresholded_results.csv",
+    output:
+        pdf="plots/simulated_accuracy/best_mean_K_init_{K}_{K_init}.pdf",
+        df="analysis/accuracy/best_mean_K_init_{K}_{K_init}.csv"
+    run:
+        import biclust_comp.analysis.simulated_plots as sim_plots
+        p, df_to_plot = sim_plots.plot_best_mean_K_init(error_df_file=input.df,
+                                                        filename=output.pdf,
+                                                        max_K=int(wildcards.K),
+                                                        max_K_init=int(wildcards.K_init))
+        df_to_plot.to_csv(output.df)
+
+rule plot_K_init_robustness:
+    input:
+        df="analysis/accuracy/thresholded_results_K_SWEEP.csv",
+    output:
+        pdf="plots/simulated_accuracy/K_init_robustness.pdf",
+        df="analysis/accuracy/K_init_robustness.csv"
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.simulated_plots as sim_plots
+        error_df = pd.read_csv(input.df)
+        df_to_plot = sim_plots.plot_K_init_robustness(error_df,
+                                                      filename=output.pdf)
+        df_to_plot.to_csv(output.df)
+
+rule plot_K_init_robustness_single:
+    input:
+        df="analysis/accuracy/thresholded_results_K_SWEEP.csv",
+    output:
+        pdf="plots/simulated_accuracy/K_init_robustness_{K}.pdf",
+        df="analysis/accuracy/K_init_robustness_{K}.csv"
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.simulated_plots as sim_plots
+        error_df = pd.read_csv(input.df)
+        df_to_plot = sim_plots.plot_K_init_robustness_single_K(error_df,
+                                                               filename=output.pdf,
+                                                               K=int(wildcards.K))
+        df_to_plot.to_csv(output.df)
+
+rule plot_datasets_aspect:
+    input:
+        df="analysis/accuracy/thresholded_results_{dataset_group}.csv",
+        baseline_df="analysis/accuracy/baseline_results_{dataset_group}.csv",
+    wildcard_constraints:
+        metric="sparse_clust_err|dense_clust_err|clust_err|recon_error_normalised",
+        failures="|_failures",
+        K_choice="best_mean|best_theoretical"
+    output:
+        pdf="plots/simulated_accuracy/compare_{dataset_group}_{metric}_{K_choice}_K_init{failures}.pdf",
+        df="analysis/accuracy/compare_{dataset_group}_{metric}_{K_choice}_K_init{failures}.csv",
+    run:
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+        import biclust_comp.analysis.simulated_plots as sim_plots
+        if wildcards.failures == '_failures':
+            include_failures = True
+        else:
+            include_failures = False
+
+        datasets = config['SIMULATED']['dataset_groups'][wildcards.dataset_group]['datasets']
+        df_to_plot, _p = sim_plots.plot_datasets(filename=output.pdf,
+                                                 datasets=datasets,
+                                                 accuracy_file=input.df,
+                                                 baseline_file=input.baseline_df,
+                                                 metric=wildcards.metric,
+                                                 K_init_choice=wildcards.K_choice,
+                                                 include_failures=include_failures)
+        df_to_plot.to_csv(output.df)
+
+rule plot_summary_best_mean:
+    input:
+        df="analysis/accuracy/thresholded_results.csv",
+        baseline_df="analysis/accuracy/baseline_results.csv",
+    wildcard_constraints:
+        failures="|_failures",
+        K_choice="best_mean|best_theoretical"
+    output:
+        pdf="plots/simulated_accuracy/summary_{metric}_{K_choice}_K_init{failures}.pdf",
+        df="analysis/accuracy/summary_{metric}_{K_choice}_K_init{failures}.csv",
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+        import biclust_comp.analysis.simulated_plots as sim_plots
+        if wildcards.failures == '_failures':
+            include_failures = True
+        else:
+            include_failures = False
+
+        error_df = pd.read_csv(input.df)
+        baseline_df = pd.read_csv(input.baseline_df)
+        df_to_plot = sim_plots.plot_summary(combined_exp=error_df,
+                                            baseline_df=baseline_df,
+                                            filename=output.pdf,
+                                            metric=wildcards.metric,
+                                            K_init_choice=wildcards.K_choice,
+                                            include_failures=include_failures)
+        df_to_plot.to_csv(output.df)
+
+rule plot_K_recovery_restricted:
+    input:
+        df="analysis/accuracy/restricted_results.csv",
+    output:
+        pdf="plots/simulated_accuracy/K_recovery_restricted.pdf",
+        df="analysis/accuracy/K_recovery_restricted.csv",
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+        import biclust_comp.analysis.simulated_plots as sim_plots
+
+        error_df = pd.read_csv(input.df)
+        error_df = error_df[error_df['K'] < 400]
+        df_to_plot = sim_plots._plot_K_recovery(error_df,
+                                                filename=output.pdf)
+        df_to_plot.to_csv(output.df)
+
+rule plot_K_recovery:
+    input:
+        df="analysis/accuracy/all_results_expected_{dataset_group}.csv",
+    output:
+        pdf="plots/simulated_accuracy/K_recovery{processing}_{K_init,\d+}_{dataset_group}.pdf",
+        df="analysis/accuracy/K_recovery{processing}_{K_init,\d+}_{dataset_group}.csv"
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+        import biclust_comp.analysis.simulated_plots as sim_plots
+
+        error_df = pd.read_csv(input.df)
+        df_to_plot = sim_plots.plot_K_recovery(error_df=error_df,
+                                               filename=output.pdf,
+                                               processing=wildcards.processing,
+                                               K_init=int(wildcards.K_init))
+        df_to_plot.to_csv(output.df)
+
+rule plot_comp_reqs_simulated:
+    input:
+        df="analysis/accuracy/thresholded_results.csv"
+    wildcard_constraints:
+        metric="s|max_rss"
+    output:
+        summary_pdf="plots/simulated_accuracy/comp_reqs_{metric}.pdf",
+        full_pdf="plots/simulated_accuracy/comp_reqs_{metric}_full.pdf",
+        df="analysis/accuracy/comp_reqs_{metric}.csv"
+    run:
+        import biclust_comp.analysis.simulated_plots as sim_plots
+        df_to_plot = sim_plots.plot_computation_requirements(error_df_file=input.df,
+                                                             param_to_plot=wildcards.metric,
+                                                             full_filename=output.full_pdf,
+                                                             summary_filename=output.summary_pdf,
+                                                             run_seeds=config['SIMULATED']['run_seeds'],
+                                                             sim_seeds=config['SIMULATED']['sim_seeds'])
+        df_to_plot.to_csv(output.df)
+
+
+rule plot_comp_reqs_simulated_against_K:
+    input:
+        df="analysis/accuracy/thresholded_results_{dataset_group}.csv",
+    wildcard_constraints:
+        metric="s|max_rss"
+    output:
+        pdf="plots/simulated_accuracy/comp_reqs_{metric}_against_K_{dataset_group}.pdf",
+        df="analysis/accuracy/comp_reqs_{metric}_against_K_{dataset_group}.csv"
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+        import biclust_comp.analysis.simulated_plots as sim_plots
+
+        error_df = pd.read_csv(input.df)
+        df_to_plot = sim_plots.plot_computation_requirements_against_K(error_df=error_df,
+                                                                       param_to_plot=wildcards.metric,
+                                                                       img_filename=output.pdf)
+        df_to_plot.to_csv(output.df)
+
+rule plot_factor_distribution_sparsity:
+    input:
+        df="analysis/accuracy/factor_info_sparsity_thresh_{threshold,theoretical|}.csv"
+    output:
+        pdf="plots/simulated_accuracy/factor_info/sparsity_{metric,num_genes|num_samples|num_total}_thresh_{threshold,theoretical|}.pdf"
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.simulated_plots as sim_plots
+        factor_info_df = pd.read_csv(input.df)
+        datasets = config['SIMULATED']['dataset_groups']['SPARSITY']['datasets']
+        sim_plots.plot_factor_distribution(factor_info_df, datasets, output.pdf, wildcards.metric)
+
+rule plot_embedded_factors:
+    input:
+        ids="plots/simulated_accuracy/embedding/{ids_list}.txt"
+    output:
+        pdf="plots/simulated_accuracy/embedding/{ids_list}.pdf",
+        df="plots/simulated_accuracy/embedding/{ids_list}.csv"
+    run:
+        import biclust_comp.analysis.simulated_plots as sim_plots
+        with open(input.ids) as f:
+            method_dataset_run_ids = f.read().splitlines()
+        coords_df, p = sim_plots.plot_embedded_factors_against_true(method_dataset_run_ids)
+        coords_df.to_csv(output.df)
+        p.save(output.pdf, dpi=300)
+
+rule matrix_heatmap:
+    input:
+        "{folder}/{file}.txt"
+    output:
+        "plots/{folder}/{file}_heatmap.pdf"
+    run:
+        from biclust_comp import utils
+        import matplotlib.pyplot as plt
+        import matplotlib
+
+        matplotlib.use('Agg')
+
+        print(input)
+        print(type(input))
+        df = utils.read_matrix_tsv(input[0])
+        plt.imshow(df, aspect='auto', cmap='RdBu')
+        plt.colorbar()
+        plt.savefig(output[0], bbox_inches='tight', dpi=300)
+
+rule plot_factor_recovery_scores:
+    input:
+        df="analysis/accuracy/factor_recovery_scores_{dataset_group}.csv",
+        ids="analysis/accuracy/expected_method_dataset_run_ids_{dataset_group}.txt",
+    output:
+        pdf="plots/simulated_accuracy/recovery/binned_recovery_scores_{dataset_group}.pdf",
+        pdf_factors="plots/simulated_accuracy/recovery/binned_recovery_scores_factors_{dataset_group}.pdf",
+        df="plots/simulated_accuracy/recovery/binned_recovery_scores_{dataset_group}.csv",
+        df_factors="plots/simulated_accuracy/recovery/binned_recovery_scores_factors_{dataset_group}.csv",
+    run:
+        import biclust_comp.analysis.simulated_plots as sim_plots
+        df, df_factors = sim_plots.plot_factor_recovery_by_size(input.df,
+                                                                input.ids,
+                                                                output.pdf,
+                                                                output.pdf_factors)
+        df.to_csv(output.df)
+        df_factors.to_csv(output.df_factors)
+
+rule factor_recovery_relevance_sparsity:
+    input:
+        # Also depends on X and B files, but we don't want to accidentally trigger any extra runs
+        error_df="analysis/accuracy/restricted_results_SPARSITY.csv",
+        factors_df="analysis/accuracy/factor_recovery_scores_SPARSITY.csv",
+        ids="analysis/accuracy/expected_method_dataset_run_ids_SPARSITY.txt",
+    output:
+        df_recovery="analysis/accuracy/recovery_scores_factors_SPARSITY.csv",
+        df_relevance="analysis/accuracy/relevance_scores_factors_SPARSITY.csv",
+    run:
+        import biclust_comp.analysis.simulated_plots as sim_plots
+        rec, rel = sim_plots.prepare_factor_recovery_relevance(input.error_df,
+                                                               input.factors_df,
+                                                               input.ids)
+        rec.to_csv(output.df_recovery)
+        rel.to_csv(output.df_relevance)
+
+rule plot_factor_recovery_relevance_ridge:
+    input:
+        df_recovery="analysis/accuracy/recovery_scores_factors_SPARSITY.csv",
+        df_relevance="analysis/accuracy/relevance_scores_factors_SPARSITY.csv",
+    output:
+        rec="plots/simulated_accuracy/recovery/binned_recovery_scores_factors_dist_SPARSITY.pdf",
+        rel_bin_true="plots/simulated_accuracy/recovery/binned_relevance_scores_factors_dist_SPARSITY.pdf",
+        rel_bin_rec="plots/simulated_accuracy/recovery/binned_relevance_scores_factors_dist_rec_SPARSITY.pdf",
+    shell:
+        "Rscript biclust_comp/analysis/recovery_plot.R"
+
+rule plot_combined_results_NRE:
+    input:
+        sim_df="analysis/accuracy/restricted_results.csv",
+        impc_df="analysis/IMPC/restricted_results.csv",
+        baseline_df="analysis/accuracy/baseline_results.csv",
+    output:
+        pdf="plots/combined/summary_recon_error_normalised.pdf"
+    run:
+        import biclust_comp.analysis.plots as plots
+        p = plots.plot_summary_combined(input.sim_df,
+                                        input.impc_df,
+                                        input.baseline_df,
+                                        "recon_error_normalised",
+                                        output.pdf)
+
+rule plot_K:
+    input:
+        df="analysis/accuracy/thresholded_results_{dataset_group}.csv",
+    output:
+        pdf="plots/simulated_accuracy/K_against_{metric}_{dataset_group}.pdf",
+        df="plots/simulated_accuracy/K_against_{metric}_{dataset_group}.csv",
+        pdf_lines="plots/simulated_accuracy/K_against_{metric}_{dataset_group}_lines.pdf",
+        df_lines="plots/simulated_accuracy/K_against_{metric}_{dataset_group}_lines.csv",
+        pdf_lines_point="plots/simulated_accuracy/K_against_{metric}_{dataset_group}_lines_point.pdf",
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.simulated_plots as sim_plots
+        combined_error = pd.read_csv(input.df, index_col=None)
+        df, df_lines = sim_plots.plot_K(combined_error,
+                                        output.pdf,
+                                        output.pdf_lines,
+                                        output.pdf_lines_point,
+                                        wildcards.metric)
+        df.to_csv(output.df)
+        df_lines.to_csv(output.df_lines)
+
+rule plot_overlap:
+    input:
+        "analysis/accuracy/overlap_info.csv",
+    output:
+        "plots/simulated_accuracy/restricted_mean_max_overlap.pdf",
+        "plots/simulated_accuracy/restricted_mean_mean_overlap.pdf",
+    shell:
+        "Rscript biclust_comp/analysis/overlap_plot.R"

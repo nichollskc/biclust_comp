@@ -1,0 +1,129 @@
+def dict_to_matlab_struct(dictionary):
+    quoted_elements = ["'" + str(element) + "'"
+                       for pair in list(dictionary.items())
+                       for element in pair]
+    struct_string = "struct(" + ', '.join(quoted_elements) + ")"
+    return struct_string
+
+def dict_to_command_line_args(dictionary):
+    arguments = [f"--{arg_name} {arg_value}"
+                 for arg_name, arg_value in list(dictionary.items())]
+    arguments_string = " ".join(arguments)
+    return arguments_string
+
+def iterate_prefixes_delimited(string, delim='/'):
+    fragmented = string.split(delim)
+    prefix = fragmented.pop(0)
+    if prefix:
+        yield prefix
+    while fragmented:
+        prefix += delim + fragmented.pop(0)
+        yield prefix
+
+def get_method_parameters(method, wildcards):
+    full_parameter_set_name = f'{method}/{wildcards.dataset}/run_{wildcards.run_id}'
+
+    parameters = {}
+    for parameter_set_name in iterate_prefixes_delimited(full_parameter_set_name):
+        # Look to see if there are specific parameters for this dataset
+        # If so, update the values to the specific parameters
+        if parameter_set_name in config['PARAMETERS']:
+            parameters.update(config['PARAMETERS'][parameter_set_name])
+
+    return parameters
+
+def filter_mdrs(grouped_mdrs, method=None, dataset=None, dataset_group=None):
+    if dataset_group is not None:
+        mdrs = grouped_mdrs[dataset_group]
+    else:
+        mdrs = list(itertools.chain.from_iterable(grouped_mdrs.values()))
+
+    if method is not None:
+        mdrs = [mdr for mdr in mdrs if mdr.startswith(method)]
+
+    if dataset is not None:
+        mdrs = [mdr for mdr in mdrs if utils.extract_dataset_from_mdr(mdr) == dataset]
+
+    if len(mdrs) == 0:
+        print(f"WARNING: mdr list is empty for method: {method}, dataset: {dataset}, dataset_group: {dataset_group}")
+
+    return list(set(mdrs))
+
+def get_result_files_dataset_group(wildcards):
+    return [f"results/{mdr}/X.txt"
+            for mdr in filter_mdrs(config['SIMULATED_MDRS_GROUPED'],
+                                   dataset_group=wildcards.dataset_group)]
+
+def get_log_files_dataset_group(wildcards):
+    return [f"logs/{mdr}.log"
+            for mdr in filter_mdrs(config['SIMULATED_MDRS_GROUPED'],
+                                   dataset_group=wildcards.dataset_group)]
+
+def get_log_files_dataset(wildcards):
+    return [f"logs/{mdr}.log"
+            for mdr in filter_mdrs(config['SIMULATED_MDRS_GROUPED'],
+                                   dataset=wildcards.dataset)]
+
+def get_log_files_dataset_method(wildcards):
+    return [f"logs/{mdr}.log"
+            for mdr in filter_mdrs(config['SIMULATED_MDRS_GROUPED'],
+                                   dataset=wildcards.dataset,
+                                   method=wildcards.method)]
+
+def get_all_datasets(dataset_groups=None):
+    datasets = set()
+    if dataset_groups is None:
+        dataset_groups = config['SIMULATED']['dataset_groups'].keys()
+
+    for d_group in dataset_groups:
+        if d_group == 'PARAM_SWEEP':
+            seedless_datasets = config['PARAM_SWEEP']['datasets']
+            seeds = [config['PARAM_SWEEP']['sim_seed']]
+        else:
+            seedless_datasets = config['SIMULATED']['dataset_groups'][d_group]['datasets']
+            seeds = config['SIMULATED']['sim_seeds']
+
+        datasets.update([f"{seedless}/seed_{seed}"
+                            for seedless in seedless_datasets
+                            for seed in seeds])
+
+    return list(datasets)
+
+def get_all_real_runs_group(dataset_group_config):
+    real_config_dict = {}
+    real_datasets = set()
+
+    for dataset_type, dataset_config_dict in dataset_group_config.items():
+        run_seeds = dataset_config_dict['run_seeds']
+
+        for method in dataset_config_dict['METHODS']:
+            # Find the name for K, max_iter
+            K_name = method_to_K_name.get(method, 'K_init')
+            K_list_name = method_to_K_config_list.get(method, 'NORMAL')
+            K_list = dataset_config_dict['K_init'][K_list_name].copy()
+
+            for seed in dataset_config_dict['run_seeds']:
+                # Set up the dictionary describing the seed
+                seed_dict_fn = method_to_seed_dict_fn.get(method,                       # key to use
+                                                          lambda seed: {'seed': seed})  # default value
+                seed_dict = seed_dict_fn(seed)
+
+                for dataset in dataset_config_dict['DATASETS']:
+                    real_datasets.add(dataset)
+
+                    for K in K_list:
+                        cfg_dict = {K_name: K}
+                        cfg_dict.update(seed_dict)
+                        full_name = f"{method}/{dataset}/run_seed_{seed}_K_{K}"
+
+                        real_config_dict[full_name] = cfg_dict
+
+                        # Run BicMix twice - once with qnorm=0, once with qnorm=1
+                        if method == 'BicMix':
+                            cfg_dict = {K_name: K}
+                            cfg_dict.update(seed_dict)
+                            cfg_dict.update({'qnorm': 0})
+                            qnorm_full_name = f"{full_name}_qnorm_0"
+                            real_config_dict[qnorm_full_name] = cfg_dict
+
+    return real_config_dict, real_datasets

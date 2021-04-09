@@ -1,0 +1,110 @@
+localrules: simulate_constant_blocks, simulate_sparse_dense, simulate_shift_scale
+
+rule simulate_sparse_dense:
+    log:
+        "logs/simulated/moran_gaussian/moran_spare_dense/K{K}_N{N}_G{G}_T{T}/seed_{seed}.log"
+    output:
+        Y="data/simulated/moran_gaussian/moran_spare_dense/K{K}_N{N}_G{G}_T{T}/seed_{seed}/Y.txt",
+        X_binary="data/simulated/moran_gaussian/moran_spare_dense/K{K}_N{N}_G{G}_T{T}/seed_{seed}/X_binary.txt",
+        B_binary="data/simulated/moran_gaussian/moran_spare_dense/K{K}_N{N}_G{G}_T{T}/seed_{seed}/B_binary.txt",
+        X="data/simulated/moran_gaussian/moran_spare_dense/K{K}_N{N}_G{G}_T{T}/seed_{seed}/X.txt",
+        B="data/simulated/moran_gaussian/moran_spare_dense/K{K}_N{N}_G{G}_T{T}/seed_{seed}/B.txt",
+        K="data/simulated/moran_gaussian/moran_spare_dense/K{K}_N{N}_G{G}_T{T}/seed_{seed}/K.txt",
+        N="data/simulated/moran_gaussian/moran_spare_dense/K{K}_N{N}_G{G}_T{T}/seed_{seed}/N.txt"
+    script:
+        f"{config['BICLUST_COMP_SCRIPTS']}/biclust_comp/simulate/sim1_sparse_dense.R"
+
+rule simulate_constant_blocks:
+    # Blocks with constant mean, with negbin, Gaussian or no noise
+    #   Size of bicluster varies - number of genes will be chosen using one of
+    #   the size categories from config, and same for number of genes
+    #   Number of tissues for each bicluster is chosen uniformly from [0,T]
+    log:
+        "logs/simulated/constant{noise}{noise_param}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}.log"
+    wildcard_constraints:
+        square="|square_",
+        noise="|_negbin|_gaussian",
+        # Noise parameter is either empty "" (use default)
+        #    or "\de-\d" e.g. 1e-1 for negbin p value
+        #    or "\d+" - an integer for Gaussian sigma
+        noise_param="|_\de-\d|_\d+",
+    output:
+        Y="data/simulated/constant{noise}{noise_param}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/Y.txt",
+        Y_raw="data/simulated/constant{noise}{noise_param}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/Y_raw.txt",
+        N="data/simulated/constant{noise}{noise_param}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/N.txt",
+        X="data/simulated/constant{noise}{noise_param}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/X.txt",
+        A="data/simulated/constant{noise}{noise_param}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/A.txt",
+        Z="data/simulated/constant{noise}{noise_param}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/Z.txt",
+        B="data/simulated/constant{noise}{noise_param}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/B.txt",
+        X_binary="data/simulated/constant{noise}{noise_param}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/X_binary.txt",
+        A_binary="data/simulated/constant{noise}{noise_param}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/A_binary.txt",
+        Z_binary="data/simulated/constant{noise}{noise_param}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/Z_binary.txt",
+        B_binary="data/simulated/constant{noise}{noise_param}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/B_binary.txt",
+        K="data/simulated/constant{noise}{noise_param}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/K.txt"
+    run:
+        import biclust_comp.simulate.simple as sim
+        import biclust_comp.logging_utils as logging_utils
+
+        logging_utils.setup_logging(3, logfile=log[0])
+        bic_props = config['SIMULATED']['bic_sizes'][wildcards.size]
+
+        is_square = (wildcards.square == "square_")
+
+        sim.simulate_biclusters_mixed(dict(output),
+                                      int(wildcards.N),
+                                      int(wildcards.G),
+                                      int(wildcards.T),
+                                      int(wildcards.K),
+                                      bic_props,
+                                      int(wildcards.seed),
+                                      square=is_square,
+                                      noise=wildcards.noise,
+                                      noise_param=wildcards.noise_param)
+
+
+rule simulate_shift_scale:
+    # Blocks with shift-scale pattern
+    #   Size of bicluster varies - number of genes will be chosen using one of
+    #   the size categories from config, and same for number of genes
+    #   Number of tissues for each bicluster is chosen uniformly from [0,T]
+    log:
+        "logs/simulated/shift_scale_{shift}{scale}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}.log"
+    wildcard_constraints:
+        square="|square_",
+        # Shift parameter can be a number, either e.g. 1e-2 or e.g. 2
+        shift="\de-\d|\d+",
+        # Scale parameter similarly any number, or blank.
+        scale="|_\de-\d|_\d+",
+    output:
+        Y="data/simulated/shift_scale_{shift}{scale}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/Y.txt",
+        Y_raw="data/simulated/shift_scale_{shift}{scale}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/Y_raw.txt",
+        N="data/simulated/shift_scale_{shift}{scale}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/N.txt",
+        X="data/simulated/shift_scale_{shift}{scale}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/X.txt",
+        A="data/simulated/shift_scale_{shift}{scale}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/A.txt",
+        Z="data/simulated/shift_scale_{shift}{scale}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/Z.txt",
+        B="data/simulated/shift_scale_{shift}{scale}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/B.txt",
+        X_binary="data/simulated/shift_scale_{shift}{scale}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/X_binary.txt",
+        A_binary="data/simulated/shift_scale_{shift}{scale}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/A_binary.txt",
+        Z_binary="data/simulated/shift_scale_{shift}{scale}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/Z_binary.txt",
+        B_binary="data/simulated/shift_scale_{shift}{scale}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/B_binary.txt",
+        K="data/simulated/shift_scale_{shift}{scale}/{square}size_{size}/K{K}_N{N}_G{G}_T{T}/seed_{seed}/K.txt"
+    run:
+        import biclust_comp.simulate.shift_scale as sim_shift_scale
+        import biclust_comp.logging_utils as logging_utils
+
+        logging_utils.setup_logging(3, logfile=log[0])
+        bic_props = config['SIMULATED']['bic_sizes'][wildcards.size]
+
+        is_square = (wildcards.square == "square_")
+
+        sim_shift_scale._simulate_shift_scale_mixed_snakemake(dict(output),
+                                                              int(wildcards.N),
+                                                              int(wildcards.G),
+                                                              int(wildcards.T),
+                                                              int(wildcards.K),
+                                                              bic_props,
+                                                              wildcards.shift,
+                                                              wildcards.scale,
+                                                              int(wildcards.seed),
+                                                              square=is_square)
+

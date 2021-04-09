@@ -1,0 +1,252 @@
+configfile: "biclust_comp/workflows/snakemake_benchmark_config.yml"
+
+import math
+
+# In an ideal world, all the methods would have the same name for K (number of components)
+#   and max_iter (maximum number of iterations) and seed
+#   Instead, we keep track of the names that are different to the default here.
+method_to_K_name = {'SDA':      'num_comps',
+                    'nsNMF':    'rank',
+                    'SNMF':     'rank',
+                    'FABIA':    'n_clusters'}
+method_to_iter_name = {'Plaid':         'iter_layer',
+                       'MultiCluster':  None,
+                       'FABIA':         'n_iter'}
+method_to_seed_dict_fn = {'SDA': (lambda seed: {'set_seed': f"{seed} {seed * 2}"}),
+                          'MultiCluster': (lambda seed: {}),
+                          'FABIA': (lambda seed: {'random_state': seed})}
+
+benchmark_config_dict = {}
+seeds = config['BENCHMARK_SEEDS']
+
+for method in config['BENCHMARK_METHODS']:
+
+    # Find the name for K, max_iter
+    K_name = method_to_K_name.get(method, 'K_init')
+    iter_name = method_to_iter_name.get(method, 'max_iter')
+
+    for seed_ind, seed in enumerate(seeds):
+        # Set up the dictionary describing the seed
+        seed_dict_fn = method_to_seed_dict_fn.get(method,                       # key to use
+                                                  lambda seed: {'seed': seed})  # default value
+        seed_dict = seed_dict_fn(seed)
+
+        # (1) Keep K fixed, vary the dataset
+        benchmark_K = config['BENCHMARK_DEFAULT_K']
+        for dataset in config['BENCHMARK_DATASETS']:
+            cfg_dict = {K_name: benchmark_K}
+            cfg_dict.update(seed_dict)
+            benchmark_config_dict[f"{method}/{dataset}/run_seed_{seed_ind}"] = cfg_dict
+
+        # (2) Keep dataset fixed, vary K
+        benchmark_K_dataset = config['BENCHMARK_K_DATASET']
+        for K in config['BENCHMARK_K_VALUES']:
+            cfg_dict = {K_name: K}
+            cfg_dict.update(seed_dict)
+            full_name = f"{method}/{benchmark_K_dataset}/run_K_{K}_seed_{seed_ind}"
+            benchmark_config_dict[full_name] = cfg_dict
+
+        # (3) Keep K and dataset fixed, vary maximum iterations
+        benchmark_iter_dataset = config['BENCHMARK_ITER_DATASET']
+        if iter_name is not None:
+            for mult in config['BENCHMARK_ITER_MULTIPLIERS']:
+                full_name = f"{method}/{benchmark_iter_dataset}/run_iter_{mult}_seed_{seed_ind}"
+                default_max_iter = int(config['PARAMETERS'][method][iter_name])
+                max_iter_value = math.ceil(default_max_iter * float(mult))
+                cfg_dict = {iter_name:  max_iter_value,
+                            K_name:     benchmark_K}
+                cfg_dict.update(seed_dict)
+                benchmark_config_dict[full_name] = cfg_dict
+
+config['PARAMETERS'].update(benchmark_config_dict)
+BENCHMARK_DATASET_METHOD_RUNIDS = benchmark_config_dict.keys()
+
+rule fetch_gtex_data:
+    output:
+        "data/GTEx/GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt",
+        "data/GTEx/GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_tpm.gct"
+    shell:
+        """
+        wget --no-verbose --directory-prefix=data/GTEx https://storage.googleapis.com/gtex_analysis_v8/annotations/GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt
+        wget --no-verbose --directory-prefix=data/GTEx https://storage.googleapis.com/gtex_analysis_v8/rna_seq_data/GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_tpm.gct.gz
+        gunzip data/GTEx/GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_tpm.gct.gz
+        """
+
+rule preprocess_gtex_data:
+    input:
+        samp_atts="data/GTEx/GTEx_Analysis_v8_Annotations_SampleAttributesDS.txt",
+        tpm="data/GTEx/GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_tpm.gct"
+    output:
+        tpm="data/GTEx/GTEx_large_T{T}_gene_tpm.txt"
+    run:
+        import biclust_comp.processing.gtex as gtex
+        gtex.choose_samples_genes(output.tpm,
+                                  input.tpm,
+                                  input.samp_atts,
+                                  max_genes=config['BENCHMARK_MAX_GENES'],
+                                  n_tissues=int(wildcards.T))
+
+rule get_subset_gtex:
+    input:
+        tpm="data/GTEx/GTEx_large_T{T}_gene_tpm.txt"
+    output:
+        Y="data/GTEx/GTEx_T{T}_N{N}_G{G}/Y.txt",
+        N="data/GTEx/GTEx_T{T}_N{N}_G{G}/N.txt",
+        sample_info="data/GTEx/GTEx_T{T}_N{N}_G{G}/sample_info.txt",
+        gene_info="data/GTEx/GTEx_T{T}_N{N}_G{G}/gene_info.txt"
+    run:
+        import biclust_comp.processing.gtex as gtex
+        gtex.process_gtex_subset(infile=input.tpm,
+                                 outfile=output.Y,
+                                 sample_info=output.sample_info,
+                                 gene_info=output.gene_info,
+                                 N=int(wildcards.N),
+                                 G=int(wildcards.G))
+
+        with open(output.N, 'w') as f:
+            f.write(str(wildcards.N))
+
+rule run_benchmarking:
+    input:
+        benchmark=expand("results/{method_dataset_runid}/benchmark.txt",
+                          method_dataset_runid=BENCHMARK_DATASET_METHOD_RUNIDS),
+        params=expand("results/{method_dataset_runid}/params.json",
+                      method_dataset_runid=BENCHMARK_DATASET_METHOD_RUNIDS)
+    output:
+        # Touch a file to indicate that this step is complete
+        touch("analysis/benchmark/run_benchmarking.complete")
+
+rule benchmark_dataframe:
+    input:
+        "analysis/benchmark/run_benchmarking.complete"
+    params:
+        method_dataset_runids=BENCHMARK_DATASET_METHOD_RUNIDS
+    output:
+        df="analysis/benchmark/benchmark.tsv"
+    run:
+        import biclust_comp.analysis.benchmarking as comp_reqs
+
+        benchmark_df = comp_reqs.construct_combined_df(params.method_dataset_runids)
+        benchmark_df.to_csv(output.df, sep='\t')
+
+rule benchmark_correlation_plot:
+    input:
+        df="{folder}/benchmark.tsv"
+    output:
+        fig="{folder}/benchmark_correlation.png"
+    run:
+        import biclust_comp.analysis.benchmarking as comp_reqs
+        comp_reqs.correlation_plot(input.df, output.fig)
+
+rule benchmark_plot_against_K_restricted:
+    input:
+        df="{folder}/benchmark.tsv"
+    output:
+        fig="{folder}/benchmark_plot_K_max_{max_K}.png"
+    run:
+        import biclust_comp.analysis.benchmarking as comp_reqs
+        comp_reqs.plot_against_K(input.df, benchmark_K_dataset, "K_1_seed_0", output.fig, max_K=int(wildcards.max_K))
+
+rule benchmark_plot_against_K:
+    input:
+        df="{folder}/benchmark.tsv"
+    output:
+        fig="{folder}/benchmark_plot_K.png"
+    run:
+        import biclust_comp.analysis.benchmarking as comp_reqs
+        comp_reqs.plot_against_K(input.df, benchmark_K_dataset, "K_1_seed_0", output.fig)
+
+rule benchmark_plot_against_iter_restricted:
+    input:
+        df="{folder}/benchmark.tsv"
+    output:
+        fig="{folder}/benchmark_plot_iter_max_{maximum_iter}.png"
+    run:
+        import biclust_comp.analysis.benchmarking as comp_reqs
+        comp_reqs.plot_against_iter(input.df, benchmark_iter_dataset, "iter_1_seed_0", output.fig, int(wildcards.maximum_iter))
+
+rule benchmark_plot_against_iter:
+    input:
+        df="{folder}/benchmark.tsv"
+    output:
+        fig="{folder}/benchmark_plot_iter.png"
+    run:
+        import biclust_comp.analysis.benchmarking as comp_reqs
+        comp_reqs.plot_against_iter(input.df, benchmark_iter_dataset, "iter_1_seed_0", output.fig)
+
+rule benchmark_plot_against_G:
+    input:
+        df="{folder}/benchmark.tsv"
+    output:
+        fig="{folder}/benchmark_plot_G.png"
+    run:
+        import biclust_comp.analysis.benchmarking as comp_reqs
+        comp_reqs.plot_against_var_simple(input.df,
+                                          'G',
+                                          config['BENCHMARK_G_DATASET'],
+                                          'seed_0',
+                                          output.fig)
+
+rule benchmark_plot_against_N:
+    input:
+        df="{folder}/benchmark.tsv"
+    output:
+        fig="{folder}/benchmark_plot_N.png"
+    run:
+        import biclust_comp.analysis.benchmarking as comp_reqs
+        comp_reqs.plot_against_var_simple(input.df,
+                                          'N',
+                                          config['BENCHMARK_N_DATASET'],
+                                          'seed_0',
+                                          output.fig)
+
+rule benchmark_plot_against_T:
+    input:
+        df="{folder}/benchmark.tsv"
+    output:
+        fig="{folder}/benchmark_plot_T.png"
+    run:
+        import biclust_comp.analysis.benchmarking as comp_reqs
+        comp_reqs.plot_against_var_simple(input.df,
+                                          'T',
+                                          config['BENCHMARK_T_DATASET'],
+                                          'seed_0',
+                                          output.fig)
+
+rule benchmark_plot_against_NT:
+    input:
+        df="{folder}/benchmark.tsv"
+    output:
+        fig="{folder}/benchmark_plot_NT.png"
+    run:
+        import biclust_comp.analysis.benchmarking as comp_reqs
+        comp_reqs.plot_against_NT(input.df,
+                                  config['BENCHMARK_NT_DATASET'],
+                                  'seed_0',
+                                  output.fig)
+
+rule benchmark_simulated_dataframe:
+    input:
+        "analysis/accuracy/exact_results_ready",
+        "analysis/accuracy/binary_results_ready"
+    params:
+        method_dataset_runids=config['SIMULATED_DATASET_METHOD_RUNIDS']
+    output:
+        df="analysis/benchmark/benchmark_simulated.tsv"
+    run:
+        import biclust_comp.analysis.benchmarking as comp_reqs
+
+        benchmark_df = comp_reqs.construct_combined_df(params.method_dataset_runids)
+        benchmark_df.to_csv(output.df, sep='\t')
+
+rule benchmark:
+    input:
+        "analysis/benchmark/benchmark_correlation.png",
+        "analysis/benchmark/benchmark_plot_iter.png",
+        "analysis/benchmark/benchmark_plot_iter_max_100000.png",
+        "analysis/benchmark/benchmark_plot_K.png",
+        "analysis/benchmark/benchmark_plot_K_max_200.png",
+        "analysis/benchmark/benchmark_plot_N.png",
+        "analysis/benchmark/benchmark_plot_G.png",
+        "analysis/benchmark/benchmark_plot_T.png",
+        "analysis/benchmark/benchmark_plot_NT.png",

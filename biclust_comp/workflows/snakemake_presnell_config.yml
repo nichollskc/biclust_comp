@@ -1,0 +1,21 @@
+PRESNELL:
+  'all_genes':
+    DATASETS:
+      - 'real/presnell/log/expressed'
+      - 'real/presnell/deseq_sf/log/expressed'
+      - 'real/presnell/deseq_sf/raw/expressed'
+    METHODS: ['BicMix', 'FABIA', 'Plaid', 'SSLB', 'SNMF', 'nsNMF']
+    K_init:
+      OVERESTIMATE: [10, 25, 60]
+      NORMAL: [10, 25, 60]
+    run_seeds: [1024, 4321, 1234, 5151, 6262, 1313, 8080, 5678, 2345, 3456]
+  'tensor':
+    DATASETS:
+      - 'real/presnell/log/expressed/tensor'
+      - 'real/presnell/deseq_sf/log/expressed/tensor'
+      - 'real/presnell/deseq_sf/raw/expressed/tensor'
+    METHODS: ['BicMix', 'FABIA', 'Plaid', 'SSLB', 'SNMF', 'nsNMF', 'SDA', 'MultiCluster']
+    K_init:
+      OVERESTIMATE: [10, 25, 60]
+      NORMAL: [10, 25, 60]
+    run_seeds: [1024, 4321, 1234, 5151, 6262, 1313, 8080, 5678, 2345, 3456]

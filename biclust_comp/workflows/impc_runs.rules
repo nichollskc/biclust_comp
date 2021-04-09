@@ -1,0 +1,42 @@
+configfile: f"{config['BICLUST_COMP_SCRIPTS']}/biclust_comp/workflows/snakemake_multiple_impc_config.yml"
+
+method_to_K_name = {'SDA':      'num_comps',
+                    'nsNMF':    'rank',
+                    'SNMF':     'rank',
+                    'FABIA':    'n_clusters'}
+method_to_seed_dict_fn = {'SDA': (lambda seed: {'set_seed': f"{seed} {seed * 2}"}),
+                          'MultiCluster': (lambda seed: {}),
+                          'FABIA': (lambda seed: {'random_state': seed})}
+method_to_K_config_list = {'SSLB':     'OVERESTIMATE',
+                           'BicMix':   'OVERESTIMATE',
+                           'BicMix_qnorm0':   'OVERESTIMATE'}
+
+
+IMPC_CONFIG_DICT, IMPC_DATASETS = get_all_real_runs_group(config['IMPC'])
+config['PARAMETERS'].update(IMPC_CONFIG_DICT)
+config['IMPC_DATASETS'] = list(IMPC_DATASETS)
+config['IMPC_DATASET_METHOD_RUNIDS'] = list(IMPC_CONFIG_DICT.keys())
+config['IMPC_DATASET_METHOD_RUNIDS_RAW'] = [key for key in IMPC_CONFIG_DICT.keys()
+                                            if not key.startswith('Plaid')]
+
+IMPC_METHODS, IMPC_SUBFOLDERS, IMPC_RUNIDS = glob_wildcards("results/{method}/real/IMPC/{subfolder_preprocessing}/run_{run_id}/X.txt")
+IMPC_ANALYSIS_DATASET_METHOD_RUNIDS = []
+IMPC_ANALYSIS_DATASET_METHOD_RUNIDS_RAW = []
+for i in range(len(IMPC_METHODS)):
+    dataset_method_runid = f"{IMPC_METHODS[i]}/real/IMPC/{IMPC_SUBFOLDERS[i]}/run_{IMPC_RUNIDS[i]}"
+    if dataset_method_runid in config['IMPC_DATASET_METHOD_RUNIDS']:
+        IMPC_ANALYSIS_DATASET_METHOD_RUNIDS.append(dataset_method_runid)
+    if dataset_method_runid in config['IMPC_DATASET_METHOD_RUNIDS_RAW']:
+        IMPC_ANALYSIS_DATASET_METHOD_RUNIDS_RAW.append(dataset_method_runid)
+
+rule impc_results:
+    input:
+        expand("logs/{method_dataset_runid}.log",
+               method_dataset_runid=config['IMPC_DATASET_METHOD_RUNIDS']),
+
+rule impc_generate_expected_runids:
+    output:
+        txt="analysis/IMPC/expected_method_dataset_run_ids.txt"
+    run:
+        with open(output.txt, 'w') as f:
+            f.write('\n'.join(config['IMPC_DATASET_METHOD_RUNIDS']))

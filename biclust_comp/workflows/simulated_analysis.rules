@@ -1,0 +1,292 @@
+localrules: accuracy_exact_thresholds, accuracy_binary_thresholds
+
+rule baseline_df:
+    input:
+        df="analysis/accuracy/combined_accuracy_ext_{dataset_group}.csv",
+    output:
+        df="analysis/accuracy/baseline_results_{dataset_group}.csv",
+    run:
+        import pandas as pd
+        df = pd.read_csv(input.df)
+        baseline_rows = df[df['method'] == 'baseline_XB_true']
+        logging.info(baseline_rows.shape)
+
+        baseline_rows.drop_duplicates(subset=['method_dataset_run_id'], inplace=True)
+        logging.info(baseline_rows.shape)
+        baseline_rows.to_csv(output.df, index=False)
+
+rule restricted_datasets:
+    input:
+        df="analysis/accuracy/combined_accuracy_ext{dataset_group}.csv",
+        ids="analysis/accuracy/expected_method_dataset_run_ids{dataset_group}.txt"
+    wildcard_constraints:
+        dataset_group=".*"
+    output:
+        full_expected="analysis/accuracy/all_results_expected{dataset_group}.csv",
+        thresholded="analysis/accuracy/thresholded_results{dataset_group}.csv",
+        restricted="analysis/accuracy/restricted_results{dataset_group}.csv",
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+
+        error_df = pd.read_csv(input.df,
+                               index_col=None)
+        error_df['run_complete'] = (error_df['recovered_K'] > 0)
+        logging.info(f"Filtering error df {input.df}, which has shape {error_df.shape}")
+        error_df_exp = acc_utils.restrict_to_expected_runs(error_df,
+                                                           input.ids)
+        error_df_exp_failures = acc_utils.add_na_rows_expected_runs(error_df_exp,
+                                                                    input.ids)
+        error_df_exp_failures.fillna({'run_complete': False}, inplace=True)
+        error_df_exp_failures.to_csv(output.full_expected, index=False)
+
+        error_df_exp_failures_thr = acc_utils.restrict_to_best_threshold(error_df_exp_failures)
+        error_df_exp_failures_thr.to_csv(output.thresholded, index=False)
+
+        error_df_exp_failures_thr_K = acc_utils.restrict_to_best_theoretical_K_init(error_df_exp_failures_thr)
+        error_df_exp_failures_thr_K.to_csv(output.restricted, index=False)
+
+rule combined_accuracy_factor_info_sparsity:
+    input:
+        expand("analysis/accuracy/data/{dataset}/seed_{seed}/factor_info.csv",
+               dataset=config['SIMULATED']['dataset_groups']['SPARSITY']['datasets'], seed=config['SIMULATED']['sim_seeds']),
+        df="analysis/accuracy/combined_accuracy_ext_SPARSITY.csv",
+    output:
+        df="analysis/accuracy/factor_info_sparsity_thresh_{threshold,theoretical|}.csv"
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+        combined_error_df = pd.read_csv(input.df, index_col=None)
+        combined_error_df = acc_utils.restrict_to_expected_runs(combined_error_df,
+                                                                acc_utils.EXPECTED_SIMULATED_RUNIDS)
+        if wildcards.threshold == 'theoretical':
+            combined_error_df = acc_utils.restrict_to_best_threshold(combined_error_df)
+        elif wildcards.threshold == '':
+            combined_error_df = combined_error_df[combined_error_df['processing'] == '_thresh_0e+0']
+        combined_error_df = acc_utils.restrict_to_best_theoretical_K_init(combined_error_df)
+        print(combined_error_df.shape)
+        factor_info_df = acc_utils.construct_factor_info_df(config['SIMULATED']['dataset_groups']['SPARSITY']['datasets'],
+                                                            combined_error_df)
+        factor_info_df.to_csv(output.df)
+
+rule combine_from_dataset_groups:
+    input:
+        dfs=expand("analysis/accuracy/{{accuracy_df}}_{dataset_group}.csv",
+                   dataset_group=config['SIMULATED']['main_dataset_groups'])
+    wildcard_constraints:
+        accuracy_df="binary_accuracy_ext|exact_accuracy_ext|combined_accuracy_ext|benchmark|params|baseline_results"
+    output:
+        "analysis/accuracy/{accuracy_df}.csv"
+    run:
+        import pandas as pd
+        error_dfs = [pd.read_csv(file) for file in input.dfs]
+        combined_df = pd.concat(error_dfs)
+        combined_df = combined_df.drop_duplicates().reset_index(drop=True)
+        combined_df.to_csv(output[0], index=False)
+
+rule combined_accuracy:
+    input:
+        binary="analysis/accuracy/binary_accuracy_thresholds_{dataset_group}.csv",
+        exact="analysis/accuracy/exact_accuracy_thresholds_{dataset_group}.csv"
+    output:
+        binary_error="analysis/accuracy/binary_accuracy_ext_{dataset_group}.csv",
+        exact_error="analysis/accuracy/exact_accuracy_ext_{dataset_group}.csv",
+        combined_error="analysis/accuracy/combined_accuracy_ext_{dataset_group}.csv",
+        benchmark_df="analysis/accuracy/benchmark_{dataset_group}.csv",
+        params_df="analysis/accuracy/params_{dataset_group}.csv",
+    run:
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+        out_dict = acc_utils.setup_error_dfs(input.binary, input.exact)
+        for key, df in out_dict.items():
+            df.to_csv(output[key], index=False)
+
+def get_all_exact_thresholds_group(wildcards):
+    datasets = get_all_datasets([wildcards['dataset_group']])
+    return expand("analysis/accuracy/{dataset}/{method}/exact_accuracy_thresholds.csv",
+                   dataset=datasets,
+                   method=config['METHODS'])
+
+rule accuracy_exact_thresholds_aspect:
+    input:
+        dfs=get_all_exact_thresholds_group
+    output:
+        "analysis/accuracy/exact_accuracy_thresholds_{dataset_group}.csv"
+    run:
+        import pandas as pd
+        error_dfs = [pd.read_csv(file) for file in input.dfs]
+        combined_df = pd.concat(error_dfs)
+        combined_df.to_csv(output[0], index=False)
+
+rule accuracy_exact_thresholds:
+    input:
+        dfs=expand("analysis/accuracy/{dataset}/{method}/exact_accuracy_thresholds.csv",
+                   dataset=config['SIMULATED_DATASETS'],
+                   method=config['METHODS'])
+    output:
+        "analysis/accuracy/exact_accuracy_thresholds.csv"
+    run:
+        import pandas as pd
+        error_dfs = [pd.read_csv(file) for file in input.dfs]
+        combined_df = pd.concat(error_dfs)
+        combined_df.to_csv(output[0], index=False)
+
+rule accuracy_exact_thresholds_dataset:
+    input:
+        "data/{dataset}/Y.txt",
+        "data/{dataset}/X.txt",
+        "data/{dataset}/B.txt",
+        "analysis/accuracy/RESULTS_READY_{dataset}",
+    log:
+        "logs/analysis/accuracy/{dataset}/{method}/exact_accuracy_thresholds.log"
+    output:
+        "analysis/accuracy/{dataset}/{method}/exact_accuracy_thresholds.csv"
+    run:
+        import biclust_comp.analysis.accuracy as acc
+        import biclust_comp.logging_utils as logging_utils
+
+        logging_utils.setup_logging(3, logfile=log[0])
+        df = acc.compare_exact_thresholds(wildcards.dataset, [wildcards.method])
+        df.to_csv(output[0], index=False, header=True)
+
+def get_all_binary_thresholds_group(wildcards):
+    datasets = get_all_datasets([wildcards['dataset_group']])
+    return expand("analysis/accuracy/{dataset}/{method}/binary_accuracy_thresholds.csv",
+                   dataset=datasets,
+                   method=config['METHODS'])
+
+rule accuracy_binary_thresholds_aspect:
+    input:
+        dfs=get_all_binary_thresholds_group
+    output:
+        "analysis/accuracy/binary_accuracy_thresholds_{dataset_group}.csv"
+    run:
+        import pandas as pd
+        error_dfs = [pd.read_csv(file) for file in input.dfs]
+        combined_df = pd.concat(error_dfs)
+        combined_df.to_csv(output[0], index=False)
+
+rule accuracy_binary_thresholds:
+    input:
+        dfs=expand("analysis/accuracy/{dataset}/{method}/binary_accuracy_thresholds.csv",
+                   dataset=config['SIMULATED_DATASETS'],
+                   method=config['METHODS'])
+    output:
+        "analysis/accuracy/binary_accuracy_thresholds.csv"
+    run:
+        import pandas as pd
+        error_dfs = [pd.read_csv(file) for file in input.dfs]
+        combined_df = pd.concat(error_dfs)
+        combined_df.to_csv(output[0], index=False)
+
+rule accuracy_binary_thresholds_dataset:
+    input:
+        "data/{dataset}/X_binary.txt",
+        "data/{dataset}/B_binary.txt",
+        "analysis/accuracy/RESULTS_READY_{dataset}",
+    log:
+        "logs/analysis/accuracy/{dataset}/{method}/binary_accuracy_thresholds.log"
+    output:
+        "analysis/accuracy/{dataset}/{method}/binary_accuracy_thresholds.csv"
+    run:
+        import biclust_comp.analysis.accuracy as acc
+        import biclust_comp.logging_utils as logging_utils
+
+        logging_utils.setup_logging(3, logfile=log[0])
+        df = acc.compare_binary_thresholds(wildcards.dataset, [wildcards.method])
+        df.to_csv(output[0], index=False, header=True)
+
+rule accuracy_factor_info_dataset:
+    input:
+        "{folder}/X{processing}_binary.txt",
+        "{folder}/B{processing}_binary.txt",
+    log:
+        "logs/analysis/accuracy/{folder}/factor_info{processing}.log"
+    output:
+        "analysis/accuracy/{folder}/factor_info{processing,.*}.csv"
+    run:
+        import biclust_comp.analysis.accuracy as acc
+        import biclust_comp.logging_utils as logging_utils
+
+        logging_utils.setup_logging(3, logfile=log[0])
+        df = acc.collect_factor_information(wildcards.folder,
+                                            wildcards.processing)
+        df.to_csv(output[0], index=True, header=True)
+
+rule accuracy_factor_info:
+    input:
+        expand("analysis/accuracy/data/{dataset}/factor_info.csv",
+               dataset=config['SIMULATED_DATASETS'])
+
+rule exploded_recovery_scores:
+    input:
+        df="analysis/accuracy/combined_accuracy_ext_{dataset_group}.csv",
+    output:
+        df="analysis/accuracy/factor_recovery_scores_{dataset_group}.csv",
+    run:
+        from biclust_comp.analysis import accuracy_utils as acc_utils
+        datasets = get_all_datasets([wildcards.dataset_group])
+        df = acc_utils.construct_factor_recovery_df(input.df, datasets)
+        df.to_csv(output.df, index=False)
+
+rule calculate_similarity_between_runs:
+    input:
+        get_log_files_dataset
+    output:
+        df="plots/simulated_accuracy/similarity/{dataset}.csv",
+    run:
+        import biclust_comp.analysis.accuracy as acc
+        method_run_id_patterns = {method : (method, r'.*/run_seed_\d+_K_\d+/X.txt')
+                                  for method in config['METHODS']}
+        method_run_id_patterns['BicMix'] = ('BicMix', r'.*/run_seed_\d+_K_\d+_qnorm_0/X.txt')
+        method_run_id_patterns['BicMix-Q'] = ('BicMix', r'.*/run_seed_\d+_K_\d+/X.txt')
+
+        df = acc.calculate_similarity_for_dataset(wildcards.dataset,
+                                                  method_run_id_patterns)
+
+        df.to_csv(output.df)
+
+rule results_simulated_factor_info:
+    group: "factor_info"
+    input:
+        expand("analysis/accuracy/results/{method_dataset_runid}/factor_info.csv",
+               method_dataset_runid=config['SIMULATED_DATASET_METHOD_RUNIDS']),
+        expand("analysis/accuracy/results/{method_dataset_runid}/factor_info_scaled.csv",
+               method_dataset_runid=config['SIMULATED_DATASET_METHOD_RUNIDS_RAW']),
+        expand("analysis/accuracy/results/{method_dataset_runid}/factor_info_thresh_1e-4.csv",
+               method_dataset_runid=config['SIMULATED_DATASET_METHOD_RUNIDS_RAW']),
+
+rule failure_counts_table:
+    input:
+        df="analysis/accuracy/{results_file}_results.csv",
+    output:
+        table="analysis/latex_tables/simulated/{results_file}_failures_latex.txt"
+    run:
+        import biclust_comp.analysis.summarise_results as sr
+        sr.output_latex_table_failure_counts(input.df, output.table, name='Simulated')
+
+rule summarised_results_table:
+    # Some idea that we have the files we need
+    input:
+        "analysis/latex_tables/simulated/restricted_failures_latex.txt",
+        "analysis/latex_tables/IMPC/restricted_failures_latex.txt",
+    output:
+        df="analysis/combined/summarised_results.csv",
+        table="analysis/latex_tables/combined/summarised_results.txt",
+    run:
+        import biclust_comp.analysis.summarise_results as sr
+
+        measures_df = sr.output_results_table(combined_error_sim_ws="./",
+                                              combined_error_IMPC_ws="./",
+                                              combined_error_sim_K_ws="./",
+                                              output_txt=output.table)
+        measures_df.to_csv(output.df)
+
+rule overlap_df:
+    input:
+        df="analysis/accuracy/thresholded_results.csv",
+    output:
+        df="analysis/accuracy/overlap_info.csv",
+    run:
+        import biclust_comp.analysis.overlap as overlap
+        overlap_df = overlap.calculate_overlap_all_datasets_with_scores(input.df)
+        overlap_df.to_csv(output.df, index=False)

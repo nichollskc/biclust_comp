@@ -1,0 +1,50 @@
+# Some of the methods fail on very small datasets, or with large numbers of iterations
+#   In this case, we still want to be able to compare the time taken for the methods that
+#   did run, so the easiest way to solve it is to subsequently run this workflow to
+#   add empty files to the failed method/datasets.
+#
+# First run the workflow normally:
+# snakemake benchmark
+# Then if any fail, run this to fill in the failed methods
+# snakemake benchmark_fill_all_missing --snakefile biclust_comp/workflows/benchmarking_fill_missing.rules >> logs/fill_all_missing.log
+# Then finally run the workflow normally again to generate the plots etc.
+# snakemake benchmark
+
+# Ensure that this rule to copy the empty files has higher priority than the real
+#   methods (since we expect them to fail on the remaining datasets)
+ruleorder: benchmark_fill_missing > run_bicmix
+ruleorder: benchmark_fill_missing > run_fabia
+ruleorder: benchmark_fill_missing > run_multicluster
+ruleorder: benchmark_fill_missing > run_nsNMF
+ruleorder: benchmark_fill_missing > run_plaid
+ruleorder: benchmark_fill_missing > run_sda
+ruleorder: benchmark_fill_missing > run_SNMF
+ruleorder: benchmark_fill_missing > run_sslb
+
+include: "../Snakefile"
+configfile: "biclust_comp/workflows/snakemake_default_config.yml"
+
+rule benchmark_fill_missing:
+    output:
+        benchmark="results/{method_dataset_runid}/benchmark.txt",
+        params="results/{method_dataset_runid}/params.json"
+    log:
+        "results/{method_dataset_runid}/fill_missing.log"
+    shell:
+        """
+        cp biclust_comp/workflows/empty_benchmark.txt {output.benchmark}
+        cp biclust_comp/workflows/empty_params.json {output.params}
+        echo "Method failed to run on this dataset, so empty benchmark"\
+             "and params files copied to the directory using the rule"\
+             "'benchmark_fill_missing' from file"\
+             "'biclust_comp/workflows/benchmarking_fill_missing.rules' so that analysis"\
+             "could be continued without this run." > {log}
+        """
+
+rule benchmark_fill_all_missing:
+    input:
+        benchmark=expand(rules.benchmark_fill_missing.output.benchmark,
+               method_dataset_runid=BENCHMARK_DATASET_METHOD_RUNIDS),
+        params=expand(rules.benchmark_fill_missing.output.params,
+               method_dataset_runid=BENCHMARK_DATASET_METHOD_RUNIDS)
+

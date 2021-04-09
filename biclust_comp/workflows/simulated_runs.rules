@@ -1,0 +1,58 @@
+localrules: results_simulated_all, results_simulated_dataset, results_simulated_group
+
+param_sweep_dict = plan.construct_planned_runs_dict_param_sweep(config)
+all_datasets, runids_dict, sim_params_dict = plan.construct_planned_runs_dict(config,
+                                                                              config['SIMULATED']['all_dataset_groups'])
+runids_dict['PARAM_SWEEP'] = list(param_sweep_dict.keys())
+
+combined_params_dict = plan.combine_parameter_dicts(param_sweep_dict, sim_params_dict)
+config['PARAMETERS'].update(combined_params_dict)
+
+config['SIMULATED_MDRS_GROUPED'] = runids_dict
+config['SIMULATED_DATASETS'] = all_datasets
+config['SIMULATED_DATASET_METHOD_RUNIDS'] = list(sim_params_dict.keys())
+config['PARAM_SWEEP_DATASET_METHOD_RUNIDS'] = list(param_sweep_dict.keys())
+config['SIMULATED_DATASET_METHOD_RUNIDS_RAW'] = [key for key in sim_params_dict.keys()
+                                                 if not key.startswith('Plaid')]
+
+rule results_simulated_all:
+    input:
+        expand("logs/{method_dataset_runid}.log",
+               method_dataset_runid=config['SIMULATED_DATASET_METHOD_RUNIDS']),
+    output:
+        touch("analysis/accuracy/RESULTS_READY")
+
+rule results_simulated_dataset:
+    input:
+        get_log_files_dataset
+    output:
+        touch("analysis/accuracy/RESULTS_READY_{dataset}")
+
+rule results_simulated_group_force:
+    input:
+        get_result_files_dataset_group
+    output:
+        touch("analysis/accuracy/RESULTS_FINISHED_{dataset_group}")
+
+rule results_simulated_group:
+    input:
+        get_log_files_dataset_group
+    output:
+        touch("analysis/accuracy/RESULTS_READY_{dataset_group}")
+
+rule generate_expected_runids_group:
+    output:
+        ids="analysis/accuracy/expected_method_dataset_run_ids_{dataset_group}.txt"
+    run:
+        group_datasets, group_run_ids_dict, group_params_dict = plan.construct_planned_runs_dict(config,
+                                                                                                 [wildcards.dataset_group])
+        with open(output.ids, 'w') as f:
+            f.write('\n'.join(filter_mdrs(group_run_ids_dict,
+                                          dataset_group=wildcards.dataset_group)))
+
+rule generate_expected_runids:
+    output:
+        ids="analysis/accuracy/expected_method_dataset_run_ids.txt"
+    run:
+        with open(output.ids, 'w') as f:
+            f.write('\n'.join(config['SIMULATED_DATASET_METHOD_RUNIDS']))

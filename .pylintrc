@@ -1,0 +1,4 @@
+[TYPECHECK]
+ignored-classes=BiclusterComparer
+
+additional-builtins=snakemake

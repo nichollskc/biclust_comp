@@ -1,0 +1,12 @@
+simulate_constant_blocks
+simulate_sparse_dense
+generate_expected_runids
+generate_expected_runids_group
+run_SNMF
+run_bicmix
+run_fabia
+run_multicluster
+run_nsNMF
+run_plaid
+run_sda
+run_sslb

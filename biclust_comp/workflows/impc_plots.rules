@@ -1,0 +1,292 @@
+wildcard_constraints:
+    K_choice="50|200|theoretical|faceted"
+
+rule impc_plots:
+    input:
+        "plots/IMPC/scatter_-_traits_genotype_mean_f1_score_-_traits_factors_mean_max_f1_score.pdf",
+        "plots/IMPC/scatter_-_traits_tissue_mean_f1_score_-_traits_factors_mean_max_f1_score.pdf",
+        "plots/IMPC/scatter_-_traits_mean_f1_score_-_traits_factors_mean_max_f1_score.pdf",
+        "plots/IMPC/threshold_adjusted_redundancy_mean_lines.pdf",
+        "plots/IMPC/threshold_recon_error_normalised_lines.pdf",
+        "plots/IMPC/threshold_traits_mean_f1_score_lines.pdf",
+        "plots/IMPC/threshold_ko_traits_nz_alpha_0-05_lines.pdf",
+        "plots/IMPC/comp_reqs_s_against_K.pdf",
+        "plots/IMPC/summary_adjusted_redundancy_mean.pdf",
+        "plots/IMPC/summary_recon_error_normalised.pdf",
+        "plots/IMPC/summary_traits_tissue_mean_f1_score.pdf",
+        "plots/IMPC/summary_traits_genotype_mean_f1_score.pdf",
+        "plots/IMPC/K_init_robustness_best.pdf",
+        expand("plots/IMPC/pathway_enrichment_K_{K_choice}_{metric}.pdf",
+               metric=["factors_pathways_nz_alpha_0-0",
+                       "ko_traits_nz_alpha_0-0"],
+               K_choice=["50", "200", "theoretical"]),
+        "plots/IMPC/pathway_enrichment_precision_recall.pdf",
+        "plots/IMPC/largest_tissue_prop_all.pdf",
+        "plots/IMPC/largest_tissue_prop_log_small_pathways.pdf",
+        "plots/IMPC/largest_tissue_prop_tensor_log_small_pathways.pdf",
+        "plots/IMPC/similarity_methods.pdf",
+        "plots/IMPC/similarity_methods_K.pdf",
+        "plots/IMPC/similarity_methods_BicMix.pdf",
+        "plots/IMPC/pathway_enrichment_num_unique_best_pathways.pdf",
+        expand("plots/IMPC/compare_samegenes_K_{K_choice}_datasets_{metric}.pdf",
+               K_choice=["50", "200", "theoretical", "faceted"],
+               metric=["traits_mean_f1_score",
+                       "factors_pathways_nz_alpha_0-05",
+                       "traits_tissue_mean_f1_score",
+                       "traits_genotype_mean_f1_score",
+                       "ko_traits_nz_alpha_0-05"]),
+        "analysis/latex_tables/IMPC/restricted_failures_latex.txt",
+        "analysis/latex_tables/IMPC/thresholded_failures_latex.txt",
+
+rule impc_plot_thresholds:
+    input:
+        df="analysis/IMPC/all_results_expected.csv",
+    wildcard_constraints:
+        failures="_failures|",
+    output:
+        summary_pdf="plots/IMPC/threshold{failures}_{metric}.pdf",
+        lines_pdf="plots/IMPC/threshold{failures}_{metric}_lines.pdf",
+        df="analysis/IMPC/threshold{failures}_{metric}.csv",
+        lines_df="analysis/IMPC/threshold{failures}_{metric}_lines.csv"
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+        import biclust_comp.analysis.simulated_plots as sim_plots
+        combined_error = pd.read_csv(input.df, index_col=None)
+        if wildcards.metric == 'adjusted_redundancy_mean':
+            combined_error['adjusted_redundancy_mean'] = acc_utils.calculate_adjusted_mean_redundancy_IMPC(combined_error)
+
+        if wildcards.failures == '_failures':
+            include_failures = True
+        else:
+            include_failures = False
+
+        edited_metric = wildcards.metric.replace("alpha_0-", "alpha 0.")
+        df, df_lines = sim_plots.plot_thresholds(error_df=combined_error,
+                                                 param_to_plot=edited_metric,
+                                                 filename_lines=output.lines_pdf,
+                                                 filename=output.summary_pdf,
+                                                 include_failures=include_failures)
+        df.to_csv(output.df)
+        df_lines.to_csv(output.lines_df)
+
+rule impc_plot_comp_reqs_simulated_against_K:
+    input:
+        df="analysis/IMPC/thresholded_results.csv",
+    wildcard_constraints:
+        metric="s|max_rss"
+    output:
+        pdf="plots/IMPC/comp_reqs_{metric}_against_K.pdf",
+        df="analysis/IMPC/comp_reqs_{metric}_against_K.csv"
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+        import biclust_comp.analysis.impc_plots as impc_plots
+        error_df = pd.read_csv(input.df)
+        df_to_plot = impc_plots.impc_plot_computation_requirements_against_K(error_df=error_df,
+                                                                             param_to_plot=wildcards.metric,
+                                                                             img_filename=output.pdf)
+        df_to_plot.to_csv(output.df)
+
+rule impc_plot_K:
+    input:
+        df="analysis/IMPC/thresholded_results.csv",
+    output:
+        summary_pdf="plots/IMPC/plot_K_{metric}.pdf",
+        lines_pdf="plots/IMPC/plot_K_{metric}_lines.pdf",
+        df="analysis/IMPC/plot_K_{metric}.csv",
+        lines_df="analysis/IMPC/plot_K_{metric}_lines.csv"
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+        import biclust_comp.analysis.simulated_plots as sim_plots
+
+        error_df = pd.read_csv(input.df, index_col=None)
+        df, df_lines = sim_plots.plot_K(error_df=error_df,
+                                        param_to_plot=wildcards.metric,
+                                        filename_lines=output.lines_pdf,
+                                        filename=output.summary_pdf)
+        df.to_csv(output.df)
+        df_lines.to_csv(output.lines_df)
+
+rule impc_plot_two_variables_scatter:
+    input:
+        df="analysis/IMPC/thresholded_results.csv",
+    output:
+        pdf="plots/IMPC/scatter_-_{x_param,[\w_]+}_-_{y_param,[\w_]+}.pdf",
+        df="analysis/IMPC/scatter_-_{x_param,[\w_]+}_-_{y_param,[\w_]+}.csv"
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+        import biclust_comp.analysis.impc_plots as impc_plots
+
+        error_df = pd.read_csv(input.df, index_col=None)
+        df_to_plot = impc_plots.impc_plot_two_variables_scatter(error_df,
+                                                                wildcards.x_param,
+                                                                wildcards.y_param,
+                                                                img_filename=output.pdf)
+        df_to_plot.to_csv(output.df)
+
+rule impc_plot_summary:
+    input:
+        df="analysis/IMPC/restricted_results.csv",
+    output:
+        pdf="plots/IMPC/summary_{metric}.pdf",
+        df="analysis/IMPC/summary_{metric}.csv"
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+        import biclust_comp.analysis.impc_plots as impc_plots
+
+        error_df = pd.read_csv(input.df, index_col=None)
+
+        if wildcards.metric == 'adjusted_redundancy_mean':
+            error_df['adjusted_redundancy_mean'] = acc_utils.calculate_adjusted_mean_redundancy_IMPC(error_df)
+        df_to_plot = impc_plots.impc_plot_summary(error_df,
+                                                  img_filename=output.pdf,
+                                                  metric=wildcards.metric)
+        df_to_plot.to_csv(output.df)
+
+rule impc_plot_K_init_robustness:
+    input:
+        df="analysis/IMPC/all_results_expected.csv",
+    output:
+        pdf="plots/IMPC/K_init_robustness{processing}.pdf",
+        df="analysis/IMPC/K_init_robustness{processing}.csv"
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+        import biclust_comp.analysis.impc_plots as impc_plots
+        error_df = pd.read_csv(input.df)
+        df_to_plot = impc_plots.impc_plot_K_init_robustness(error_df,
+                                                            filename=output.pdf,
+                                                            processing=wildcards.processing)
+        df_to_plot.to_csv(output.df)
+
+
+rule impc_plot_pathway_enrichment:
+    input:
+        df="analysis/IMPC/thresholded_results.csv",
+    output:
+        pdf="plots/IMPC/pathway_enrichment_K_{K_choice}_{prefix}.pdf",
+        df="analysis/IMPC/pathway_enrichment_K_{K_choice}_{prefix}.csv"
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+        import biclust_comp.analysis.impc_plots as impc_plots
+        error_df = pd.read_csv(input.df)
+        edited_prefix = wildcards.prefix.replace("alpha_0-", "alpha 0.")
+        df_to_plot = impc_plots.impc_plot_pathway_enrichment_thresholds(error_df,
+                                                                        img_filename=output.pdf,
+                                                                        K_choice=wildcards.K_choice,
+                                                                        column_prefix=edited_prefix)
+
+        df_to_plot.to_csv(output.df)
+
+
+rule impc_plot_pathway_enrichment_precision_recall:
+    input:
+        df="analysis/IMPC/restricted_results.csv",
+    output:
+        pdf="plots/IMPC/pathway_enrichment_precision_recall.pdf",
+        df="analysis/IMPC/pathway_enrichment_precision_recall.csv"
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+        import biclust_comp.analysis.impc_plots as impc_plots
+        error_df = pd.read_csv(input.df)
+        df_to_plot = impc_plots.impc_plot_enrichment_precision_recall(error_df,
+                                                                      img_filename=output.pdf)
+
+        df_to_plot.to_csv(output.df)
+
+
+rule impc_plot_compare_samegenes_datasets:
+    input:
+        df="analysis/IMPC/thresholded_results.csv",
+    output:
+        pdf="plots/IMPC/compare_samegenes_K_{K_choice}_datasets_{metric}.pdf",
+        df="analysis/IMPC/compare_samegenes_K_{K_choice}_datasets_{metric}.csv"
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+        import biclust_comp.analysis.impc_plots as impc_plots
+        error_df = pd.read_csv(input.df)
+        edited_metric = wildcards.metric.replace("alpha_0-", "alpha 0.")
+
+        df_to_plot = impc_plots.impc_compare_samegenes_datasets(error_df,
+                                                                img_filename=output.pdf,
+                                                                metric=edited_metric,
+                                                                K_choice=wildcards.K_choice)
+
+        df_to_plot.to_csv(output.df)
+
+
+rule impc_plot_compare_datasets:
+    input:
+        df="analysis/IMPC/restricted_results.csv",
+    output:
+        pdf="plots/IMPC/compare_datasets_{metric}.pdf",
+        df="analysis/IMPC/compare_datasets_{metric}.csv"
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+        import biclust_comp.analysis.impc_plots as impc_plots
+        error_df = pd.read_csv(input.df)
+        edited_metric = wildcards.metric.replace("alpha_0-", "alpha 0.")
+
+        df_to_plot = impc_plots.impc_compare_datasets(error_df,
+                                                      img_filename=output.pdf,
+                                                      metric=edited_metric)
+
+        df_to_plot.to_csv(output.df)
+
+
+rule impc_plot_largest_tissue_prop:
+    input:
+        df="analysis/IMPC/largest_tissue_prop_all.csv",
+        txt="analysis/IMPC/expected_method_dataset_run_ids.txt"
+    output:
+        pdf="plots/IMPC/largest_tissue_prop_{regex_name}.pdf",
+        df="analysis/IMPC/largest_tissue_prop_regex_{regex_name}.csv",
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.impc_plots as impc_plots
+
+        with open(input.txt, 'r') as f:
+            all_mdrs = f.read().splitlines()
+
+        df = pd.read_csv(input.df)
+
+        regex_dict = {'all': '.*',
+                      'log_small_pathways': r'.*real/IMPC/log/small_pathways.*',
+                      'tensor_log_small_pathways': r'.*real/IMPC/tensor/log/small_pathways.*'}
+
+        method_dataset_run_ids = [mdr for mdr in all_mdrs
+                                  if re.match(regex_dict[wildcards.regex_name], mdr) is not None]
+        print(f"Found {len(method_dataset_run_ids)} runs - first is {method_dataset_run_ids[0]}")
+
+        df_to_plot, p = impc_plots.impc_plot_largest_tissue_prop(df, method_dataset_run_ids, img_filename=output.pdf)
+        df_to_plot.to_csv(output.df)
+
+
+rule impc_similarity_plots:
+    input:
+        df="analysis/IMPC/similarity_methods.csv",
+    output:
+        base="plots/IMPC/similarity_methods.pdf",
+        K="plots/IMPC/similarity_methods_K.pdf",
+        BicMix="plots/IMPC/similarity_methods_BicMix.pdf",
+    run:
+        import biclust_comp.analysis.simulated_plots as sim_plots
+        df, p = sim_plots.plot_similarity(input.df, output.base, output.K, output.BicMix)
+
+rule impc_pathways_plots:
+    input:
+        df="analysis/IMPC/restricted_results_with_num_unique_factors.csv",
+    output:
+        "plots/IMPC/pathway_enrichment_num_unique_best_pathways.pdf",
+        "plots/IMPC/pathway_enrichment_num_factors.pdf",
+        "plots/IMPC/pathway_enrichment_num_unique_factors_75.pdf",
+    shell:
+        "Rscript biclust_comp/analysis/pathways_plot.R"

@@ -1,0 +1,289 @@
+localrules: process_IMPC, construct_tensor_IMPC, copy_IMPC_N, construct_single_tissue_dataset_IMPC
+localrules: quantile_normalise, select_variable_genes, scale_genes, log_transform
+localrules: select_variable_genes_pooled, select_genes_from_knockout_pathways, find_genes_in_knockout_pathways
+
+rule process_IMPC:
+    input:
+        raw_tpm="data/real/IMPC/tpm.tsv"
+    output:
+        Y="data/real/IMPC/raw/Y.txt",
+        gene_names="data/real/IMPC/raw/gene_names.txt",
+        sample_names="data/real/IMPC/raw/sample_names.txt"
+    shell:
+        "tail -n +2 {input.raw_tpm} | cut -f 2- > {output.Y} && "\
+        "head -n 1 {input.raw_tpm} | sed 's/\\t/\\n/g' | tail -n +2 > {output.gene_names} && "\
+        "cut -f 1 {input.raw_tpm} | tail -n +2 > {output.sample_names}"
+
+
+rule construct_single_tissue_dataset_IMPC:
+    input:
+        counts_df="data/real/IMPC/tpm.tsv",
+        sample_info="data/real/IMPC/raw/sample_info.txt",
+        gene_names="data/real/IMPC/raw/gene_names.txt",
+    wildcard_constraints:
+        tissue="\w*"
+    log:
+        "logs/data/real/IMPC/{tissue}.log"
+    output:
+        Y="data/real/IMPC/{tissue}/raw/Y.txt",
+        N="data/real/IMPC/{tissue}/raw/N.txt",
+        sample_info="data/real/IMPC/{tissue}/raw/sample_info.txt",
+        gene_names="data/real/IMPC/{tissue}/raw/gene_names.txt",
+        sample_names="data/real/IMPC/{tissue}/raw/sample_names.txt"
+    run:
+        import shutil
+        import pandas as pd
+        import biclust_comp.processing.impc as impc
+        import biclust_comp.logging_utils as logging_utils
+        logging_utils.setup_logging(3, logfile=log[0])
+
+        counts_df, num_individuals, sample_info = impc.construct_single_tissue_dataset(input.sample_info,
+                                                                                       input.counts_df,
+                                                                                       wildcards.tissue)
+
+        counts_df.to_csv(output.Y, sep="\t", header=None, index=None)
+        shutil.copy(input.gene_names, output.gene_names)
+
+        with open(output.sample_names, 'w') as f:
+            f.write("\n".join(counts_df.index))
+
+        sample_info.to_csv(output.sample_info, sep="\t", header=True, index=True)
+
+        with open(output.N, 'w') as f:
+            f.write(str(num_individuals))
+
+rule construct_tensor_IMPC:
+    input:
+        counts_df="data/real/IMPC/{folder}/tpm.tsv",
+        sample_info="data/real/IMPC/{folder}/raw/sample_info.txt",
+        gene_names="data/real/IMPC/{folder}/raw/gene_names.txt",
+    wildcard_constraints:
+        folder="|deseq_sf"
+    log:
+        "logs/data/real/IMPC/{folder}/tensor.log"
+    output:
+        Y="data/real/IMPC/tensor/{folder}/raw/Y.txt",
+        N="data/real/IMPC/tensor/{folder}/raw/N.txt",
+        sample_info="data/real/IMPC/tensor/{folder}/raw/sample_info.txt",
+        gene_names="data/real/IMPC/tensor/{folder}/raw/gene_names.txt",
+        sample_names="data/real/IMPC/tensor/{folder}/raw/sample_names.txt"
+    run:
+        import shutil
+        import pandas as pd
+        import biclust_comp.processing.impc as impc
+        import biclust_comp.logging_utils as logging_utils
+        logging_utils.setup_logging(3, logfile=log[0])
+
+        mean_counts_df, num_individuals, sample_info = impc.construct_tensor(input.sample_info,
+                                                                             input.counts_df)
+
+        mean_counts_df.to_csv(output.Y, sep="\t", header=None, index=None)
+        shutil.copy(input.gene_names, output.gene_names)
+
+        with open(output.sample_names, 'w') as f:
+            f.write("\n".join(mean_counts_df.index))
+
+        sample_info.to_csv(output.sample_info, sep="\t", header=True, index=True)
+
+        with open(output.N, 'w') as f:
+            f.write(str(num_individuals))
+
+rule copy_IMPC_N:
+    input:
+        N="data/real/IMPC/tensor/raw/N.txt",
+    output:
+        N="data/real/IMPC/tensor/{folder}/N.txt",
+    shell:
+        "cp {input} {output}"
+
+rule log_transform:
+    input:
+        Y="data/{folder}raw/Y.txt",
+        gene_names="data/{folder}raw/gene_names.txt"
+    # Default is for a wildcard to be .+ so that it can't be empty
+    # Allow folder wildcard to be empty by using .* instead
+    wildcard_constraints:
+        folder=".*"
+    output:
+        Y="data/{folder}log/Y.txt",
+        gene_names="data/{folder}log/gene_names.txt"
+    run:
+        import numpy as np
+        import shutil
+        shutil.copy(input.gene_names, output.gene_names)
+
+        Y = np.loadtxt(input.Y, ndmin=2)
+        Y_log = np.log(Y + 1)
+        np.savetxt(output.Y, Y_log, delimiter='\t')
+
+rule scale_genes:
+    input:
+        Y="data/{folder}/raw/{subfolder}/Y.txt",
+        gene_names="data/{folder}/raw/{subfolder}/gene_names.txt"
+    output:
+        Y="data/{folder}/scaled/{subfolder}/Y.txt",
+        gene_names="data/{folder}/scaled/{subfolder}/gene_names.txt"
+    run:
+        import numpy as np
+        from biclust_comp import utils
+        import shutil
+        shutil.copy(input.gene_names, output.gene_names)
+
+        Y = utils.read_np(input.Y)
+        means = np.mean(Y, axis=0)
+        assert (means == 0).sum() == 0, "Expecting no genes to be all-zero by this stage"
+        Y_scaled = Y / means
+        utils.save_np(output.Y, Y_scaled)
+
+rule quantile_normalise:
+    input:
+        Y="data/{folder}/raw/{subfolder}/Y.txt",
+        gene_names="data/{folder}/raw/{subfolder}/gene_names.txt"
+    output:
+        Y="data/{folder}/quantnorm/{subfolder}/Y.txt",
+        gene_names="data/{folder}/quantnorm/{subfolder}/gene_names.txt"
+    run:
+        from sklearn.preprocessing import QuantileTransformer
+        from biclust_comp import utils
+        import shutil
+        shutil.copy(input.gene_names, output.gene_names)
+
+        Y = utils.read_np(input.Y)
+        Y_norm = QuantileTransformer(output_distribution='normal').fit_transform(Y)
+        utils.save_np(output.Y, Y_norm)
+
+rule find_genes_in_knockout_pathways:
+    input:
+        sample_info="data/{folder}/raw/sample_info.txt",
+    output:
+        pathways_df="data/{folder}/raw/genes_in_knockout_pathways.tsv",
+        pathway_names="data/{folder}/raw/pathway_names.txt"
+    run:
+        from biclust_comp.processing import impc
+        import pandas as pd
+
+        pathways_df, pathway_names_dict = impc.find_genes_in_knockout_pathways(input.sample_info)
+        pathways_df.to_csv(output.pathways_df,
+                           sep='\t',
+                           header=True,
+                           index=True)
+
+        pd.DataFrame.from_dict(pathway_names_dict, orient='index').to_csv(output.pathway_names,
+                                                                          sep="\t")
+
+rule select_genes_from_knockout_pathways:
+    input:
+        Y="data/{folder}/raw/Y.txt",
+        pathways="data/{folder}/raw/genes_in_knockout_pathways.tsv",
+        ensembl_to_mgi="analysis/mart_export.txt",
+        gene_names="data/{folder}/raw/gene_names.txt"
+    output:
+        Y="data/{folder}/raw/small_pathways/Y.txt",
+        gene_names="data/{folder}/raw/small_pathways/gene_names.txt"
+    run:
+        from biclust_comp.processing import impc
+        Y = utils.read_np(input.Y)
+        with open(input.gene_names, 'r') as f:
+            gene_names = f.readlines()
+
+        indices, ids = impc.select_genes_from_knockout_pathways([name.strip() for name in gene_names],
+                                                                input.ensembl_to_mgi,
+                                                                input.pathways,
+                                                                500)
+
+        # This gene has much higher variance than the others and dominates PCA
+        assert 'ENSMUSG00000099702.1' not in ids
+
+        nz_indices = [idx for idx in indices if Y[:, idx].sum() != 0]
+
+        Y_pathway_genes = Y[:, nz_indices]
+        utils.save_np(output.Y, Y_pathway_genes)
+
+        pathway_gene_names = [gene_names[idx] for idx in nz_indices]
+        with open(output.gene_names, 'w') as f:
+            f.write("".join(pathway_gene_names))
+
+rule select_variable_genes_pooled:
+    input:
+        Y="data/{folder}/raw/Y.txt",
+        sample_info="data/{folder}/raw/sample_info.txt",
+        gene_names="data/{folder}/raw/gene_names.txt"
+    output:
+        Y="data/{folder}/raw/pooled{correction,|_log|_cv}/{num_genes,\d+}/Y.txt",
+        gene_names="data/{folder}/raw/pooled{correction,|_log|_cv}/{num_genes,\d+}/gene_names.txt",
+    run:
+        import numpy as np
+        import pandas as pd
+        import numpy as np
+        from biclust_comp import utils
+        from biclust_comp.processing import impc
+
+        Y_raw = utils.read_np(input.Y)
+        with open(input.gene_names, 'r') as f:
+            gene_names = f.readlines()
+
+        sample_info = pd.read_csv(input.sample_info, sep="\t")
+        tissue_column = 'Factor Value[organism part]'
+
+        counts_df = pd.DataFrame(Y_raw,
+                                 columns=[name.strip() for name in gene_names],
+                                 index=sample_info.index)
+        large_gene = gene_names.pop(27883)
+        assert large_gene == 'ENSMUSG00000099702.1\n'
+        Y = counts_df.drop(large_gene.strip(), axis=1)
+
+        if wildcards.correction == '':
+            pooled_variances = impc.calculate_pooled_variances(Y,
+                                                               sample_info.groupby(tissue_column))
+        elif wildcards.correction == '_log':
+            pooled_variances = impc.calculate_pooled_variances(np.log(Y + 1),
+                                                               sample_info.groupby(tissue_column))
+        else:
+            assert wildcards.correction == '_cv'
+            pooled_variances = impc.calculate_pooled_variances(Y/np.mean(Y, axis=0),
+                                                               sample_info.groupby(tissue_column))
+            # For genes with very small mean, CV is inaccurate. Filter out genes that
+            # have more than 80% of samples having TPM < 0.1
+            pooled_variances[((Y < 0.1).sum(axis=0)/Y.shape[0] > 0.8)] = 0
+
+        Y_variable_genes, indices = impc.sort_genes_by_variance(Y.values,
+                                                                pooled_variances,
+                                                                int(wildcards.num_genes))
+
+        utils.save_np(output.Y, Y_variable_genes)
+
+        variable_gene_names = [gene_names[idx] for idx in indices]
+        with open(output.gene_names, 'w') as f:
+            f.write("".join(variable_gene_names))
+
+rule select_variable_genes:
+    input:
+        Y="data/{folder}/raw/Y.txt",
+        gene_names="data/{folder}/raw/gene_names.txt"
+    output:
+        Y="data/{folder}/raw/{num_genes,\d+}/Y.txt",
+        gene_names="data/{folder}/raw/{num_genes,\d+}/gene_names.txt"
+    run:
+        from sklearn.feature_selection import VarianceThreshold
+        from biclust_comp import utils
+        Y = utils.read_np(input.Y)
+        print(Y[:5,:5])
+        with open(input.gene_names, 'r') as f:
+            gene_names = f.readlines()
+
+        variances = VarianceThreshold().fit(Y).variances_
+        variances[(Y != 0).sum(axis=0)/Y.shape[0] < 0.2] = 0
+        sorted_variance_indices = sorted(range(len(variances)),
+                                         key=lambda k: variances[k],
+                                         reverse=True)
+        print(sorted_variance_indices[:10])
+
+        indices = sorted_variance_indices[:int(wildcards.num_genes)]
+        print(variances[indices[:10]])
+        Y_variable_genes = Y[:, indices]
+        utils.save_np(output.Y, Y_variable_genes)
+
+        variable_gene_names = [gene_names[idx] for idx in indices]
+        with open(output.gene_names, 'w') as f:
+            f.write("".join(variable_gene_names))
+

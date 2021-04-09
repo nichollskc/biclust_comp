@@ -1,0 +1,235 @@
+PARAM_SWEEP:
+  datasets:
+    - 'simulated/constant_negbin/size_mixed/K2_N2_G10_T5'
+
+  sim_seeds: 1313
+  run_seeds: [1234]
+
+  K: [2]
+  K_SWEEP:
+    NORMAL: [3]
+    OVERESTIMATE: [5]
+
+  BicMix:
+    qnorm: []
+    a: []
+    b: []
+
+  FABIA:
+    alpha: [0.005]       # default 0.01
+    spz: []           # default 0.5
+    spl: []         # default 0
+    eps: []         # default 1e-4
+    thresZ: []   # default 0.5
+    rescale_l: []                  # default 0
+
+  Plaid:
+    row_release: [] # default 0.7 - range is [0.5, 0.7]
+    col_release: [0.5, 0.6] # default 0.7 - range is [0.5, 0.7]
+
+  SDA:
+    num_dense_comps: []
+
+  # Multicluster has no accessible parameters
+  MultiCluster: {}
+
+  nsNMF:
+    theta: [0.2]       # default 0.5
+
+  SNMF:
+    beta: [1e-6]  # default 1e-4
+
+  SSLB:
+    d: []
+    IBP: []
+    alpha: [3e-1, 3e-3, 3e-5, 3e-6]
+    a: []
+    b: []
+
+SIMULATED:
+  sim_seeds: [1313]
+  run_seeds: [1234]
+  all_dataset_groups: ['BASE', 'K_SWEEP']
+  main_dataset_groups: ['BASE']
+  dataset_groups:
+    BASE:
+      datasets:
+        - 'simulated/constant_negbin/size_mixed/K20_N2_G10_T5'
+    K_SWEEP:
+      datasets:
+        - 'simulated/constant_negbin/size_mixed/K10_N2_G10_T5'
+      K_init:
+        NORMAL: [5, 10]
+        OVERESTIMATE: [5, 10]
+
+TEST_DATASETS:
+  tests/simple_gaussian:
+    - 'BicMix'
+    - 'FABIA'
+    - 'MultiCluster'
+    # This simple dataset has negative values so can't be used with NMF methods
+    #- 'nsNMF'
+    - 'Plaid'
+    - 'SDA'
+    # This simple dataset has negative values so can't be used with NMF methods
+    #- 'SNMF'
+    - 'SSLB'
+
+  tests/simple_negbin:
+    - 'BicMix'
+    - 'FABIA'
+    - 'MultiCluster'
+    - 'nsNMF'
+    - 'Plaid'
+    - 'SDA'
+    - 'SNMF'
+    # This simple dataset has rows that are all 0, which SSLB can't cope with
+    #- 'SSLB'
+
+  tests/multifactor:
+    - 'BicMix'
+    - 'FABIA'
+    - 'MultiCluster'
+    - 'nsNMF'
+    - 'Plaid'
+    - 'SDA'
+    - 'SNMF'
+    - 'SSLB'
+
+BENCHMARK_DATASETS:
+  - 'GTEx/GTEx_T10_N5_G10'
+  - 'GTEx/GTEx_T10_N10_G30'
+
+BENCHMARK_METHODS:
+  - 'BicMix'
+  - 'FABIA'
+  - 'MultiCluster'
+  - 'nsNMF'
+  - 'Plaid'
+  - 'SDA'
+  - 'SNMF'
+  - 'SSLB'
+
+BENCHMARK_MAX_GENES: 100
+
+BENCHMARK_DEFAULT_K: 5
+
+BENCHMARK_K_DATASET: 'GTEx/GTEx_T10_N5_G10'
+
+BENCHMARK_K_VALUES: [1, 10]
+
+BENCHMARK_ITER_DATASET: 'GTEx/GTEx_T10_N5_G10'
+
+BENCHMARK_ITER_MULTIPLIERS: [1e-1]
+
+BENCHMARK_G_DATASET: 'GTEx/GTEx_T10_N5_G10'
+BENCHMARK_N_DATASET: 'GTEx/GTEx_T10_N5_G10'
+BENCHMARK_NT_DATASET: 'GTEx/GTEx_T10_N5_G10'
+BENCHMARK_T_DATASET: 'GTEx/GTEx_T10_N5_G10'
+
+BENCHMARK_SEEDS: [123456]
+
+IMPC:
+  'quantnorm':
+    DATASETS:
+      - 'real/IMPC/quantnorm/pooled/50'
+    # Exclude tensor methods and NMF methods
+    METHODS: ['FABIA', 'SSLB']
+    K_init:
+      NORMAL: [2, 20]
+      OVERESTIMATE: [5, 30]
+    run_seeds: [1024]
+  'scaled':
+    DATASETS:
+      - 'real/IMPC/scaled/pooled_cv/50'
+    # Exclude tensor methods
+    METHODS: ['BicMix', 'FABIA', 'nsNMF', 'Plaid', 'SNMF', 'SSLB']
+    K_init:
+      NORMAL: [2, 20]
+      OVERESTIMATE: [5, 30]
+    run_seeds: [1024]
+  'log':
+    DATASETS:
+      - 'real/IMPC/log/pooled_log/50'
+    METHODS: ['nsNMF']
+    K_init:
+      NORMAL: [2, 20]
+      OVERESTIMATE: [5, 30]
+    run_seeds: [1024]
+  'tensor_quantnorm':
+    DATASETS:
+      - 'real/IMPC/tensor/quantnorm/small_pathways'
+    METHODS: ['Plaid', 'SSLB']
+    K_init:
+      NORMAL: [2, 20]
+      OVERESTIMATE: [5, 30]
+    run_seeds: [1024]
+  'tensor_scaled':
+    DATASETS:
+      - 'real/IMPC/tensor/scaled/pooled_cv/50'
+    METHODS: ['BicMix', 'FABIA', 'MultiCluster', 'nsNMF', 'Plaid', 'SDA', 'SNMF', 'SSLB']
+    K_init:
+      NORMAL: [2, 20]
+      OVERESTIMATE: [5, 30]
+    run_seeds: [1024]
+
+PARAMETERS:
+  BicMix/tests/simple_gaussian:
+    max_iter: 50
+    K_init: 5
+    qnorm: 0
+
+  BicMix/tests/simple_negbin:
+    max_iter: 5000
+    K_init: 1
+    qnorm: 0
+
+  BicMix/tests/multifactor:
+    max_iter: 500
+    K_init: 10
+    qnorm: 0
+
+  FABIA/tests/multifactor:
+    n_clusters: 10
+
+  FABIA/tests/simple_gaussian:
+    n_clusters: 1
+
+  FABIA/tests/simple_negbin:
+    n_clusters: 1
+
+  Plaid/tests/simple_gaussian:
+    K_init: 1
+
+  Plaid/tests/simple_negbin:
+    K_init: 1
+
+  MultiCluster/tests/simple_negbin:
+    K_init: 1
+
+  MultiCluster/tests/simple_gaussian:
+    K_init: 1
+
+  MultiCluster/tests/multifactor:
+    K_init: 10
+
+  nsNMF/tests/simple_negbin:
+    rank: 1
+
+  SDA/tests/simple_negbin:
+    num_comps: 1
+
+  SDA/tests/simple_gaussian:
+    num_comps: 1
+
+  SDA/tests/multifactor:
+    num_comps: 10
+
+  SNMF/tests/simple_negbin:
+    rank: 1
+
+  SSLB/tests/simple_gaussian:
+    K_init: 5
+
+  SSLB/tests/multifactor:
+    K_init: 10

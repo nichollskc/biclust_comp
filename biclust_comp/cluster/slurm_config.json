@@ -1,0 +1,14 @@
+{
+  "__default__":
+  {
+    "queue": "skylake",
+    "nodes": "1",
+    "cores": "1",
+    "max_time": "12:00:00",
+  },
+  "run_sslb":
+  {
+    "queue": "skylake-long",
+    "max_time": "3-00:00:00",
+  }
+}

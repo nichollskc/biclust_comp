@@ -1,0 +1,469 @@
+localrules: impc_run_list_method_nontensor, impc_run_list_method_tensor, impc_run_list, impc_all_similarity
+
+rule impc_combined_analysis:
+    input:
+        "analysis/IMPC/restricted_results.csv",
+        expand("analysis/IMPC/{analysis_file}.tsv",
+               analysis_file=['summarised_factor_info', 'summarised_traits_summary',
+                              'summarised_pathways_summary', 'summarised_traits_fisherpvals',
+                              'summarised_traits_f1scores', 'summarised_ko_enrichment_summary'])
+
+rule impc_restricted_datasets:
+    input:
+        df="analysis/IMPC/combined_error_ext.tsv",
+        ids="analysis/IMPC/expected_method_dataset_run_ids.txt"
+    output:
+        full_expected="analysis/IMPC/all_results_expected.csv",
+        thresholded="analysis/IMPC/thresholded_results.csv",
+        restricted="analysis/IMPC/restricted_results.csv",
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+
+        error_df = pd.read_csv(input.df,
+                               sep='\t',
+                               index_col=None)
+        error_df_exp = acc_utils.restrict_to_expected_runs(error_df,
+                                                           input.ids)
+        error_df_exp.fillna({'tensor' : 'non-tensor'}, inplace=True)
+        error_df_exp_failures = acc_utils.add_na_rows_expected_runs(error_df_exp,
+                                                                    input.ids)
+        logging.info(error_df_exp_failures.shape)
+        logging.info(error_df_exp_failures['recovered_K'].value_counts())
+        error_df_exp_failures['run_complete'] = (error_df_exp_failures['recovered_K'] > 0)
+        logging.info(error_df_exp_failures['run_complete'].value_counts())
+        error_df_exp_failures.fillna({'run_complete': False}, inplace=True)
+        logging.info(error_df_exp_failures['run_complete'].value_counts())
+        error_df_exp_failures.to_csv(output.full_expected, index=False)
+
+        error_df_exp_failures_thr = acc_utils.restrict_to_best_threshold(error_df_exp_failures)
+        error_df_exp_failures_thr.to_csv(output.thresholded, index=False)
+
+        error_df_exp_failures_thr_K = acc_utils.impc_restrict_to_best_theoretical_K_init(error_df_exp_failures_thr)
+        error_df_exp_failures_thr_K.to_csv(output.restricted, index=False)
+
+
+rule impc_pathway_enrichment_setup:
+    input:
+        sample_info="data/real/IMPC/raw/sample_info.txt",
+    output:
+        full="analysis/IMPC/full_pathways.tsv",
+        ko_genes="analysis/IMPC/ko_gene_pathways.tsv",
+        pathway_names="analysis/IMPC/pathway_names.tsv"
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.enrichment as enrich
+        ko_genes_pathways_df, pathway_names_dict = enrich.construct_ko_pathways_df()
+        ko_genes_pathways_df.to_csv(output.ko_genes, sep="\t")
+        pathway_names_df = pd.DataFrame(pathway_names_dict.items(), columns=['ID', 'Name'])
+        pathway_names_df.to_csv(output.pathway_names, index=False, header=True)
+
+        pathway_IDs = [pathway_name.split('_-_')[1] for pathway_name in ko_genes_pathways_df.columns]
+        full_pathways_df = enrich.construct_full_pathways_df(pathway_IDs)
+        assert list(full_pathways_df.columns) == pathway_IDs
+        full_pathways_df.columns = ko_genes_pathways_df.columns
+        full_pathways_df.to_csv(output.full, sep="\t")
+
+
+rule impc_sample_enrichment:
+    input:
+        sample_info="data/real/IMPC/{subfolder}raw/sample_info.txt",
+        X="results/{method}/real/IMPC/{subfolder}{preprocessing}/run_{run_id}/X.txt",
+    wildcard_constraints:
+        subfolder="tensor/|liver/|",
+        postprocessing=".*"
+    output:
+        summary="analysis/IMPC/{method}/real/IMPC/{subfolder}{preprocessing}/run_{run_id}/traits_summary{postprocessing}.tsv",
+        intersections="analysis/IMPC/{method}/real/IMPC/{subfolder}{preprocessing}/run_{run_id}/traits_intersections{postprocessing}.tsv",
+        odds_ratios="analysis/IMPC/{method}/real/IMPC/{subfolder}{preprocessing}/run_{run_id}/traits_oddsratio{postprocessing}.tsv",
+        f1_scores="analysis/IMPC/{method}/real/IMPC/{subfolder}{preprocessing}/run_{run_id}/traits_f1scores{postprocessing}.tsv",
+        fisher_pvals="analysis/IMPC/{method}/real/IMPC/{subfolder}{preprocessing}/run_{run_id}/traits_fisherpvals{postprocessing}.tsv",
+    run:
+        import os
+        import biclust_comp.analysis.enrichment as enrich
+        import biclust_comp.utils as utils
+        import pandas as pd
+
+        K_thr, X_thr, B_thr = utils.read_result_threshold(os.path.dirname(input.X),
+                                                          utils.threshold_str_to_float(wildcards.postprocessing))
+        if K_thr == 0:
+            sorted_summary_df = pd.DataFrame()
+            f1_scores = pd.DataFrame()
+            intersections = pd.DataFrame()
+            odds_ratios = pd.DataFrame()
+            fisher_pvals = pd.DataFrame()
+        else:
+            sample_info = enrich.read_sample_info_IMPC(input.sample_info)
+            trait_dummies = pd.get_dummies(sample_info[['tissue', 'genotype']])
+
+            f1_scores, intersections, fisher_pvals, odds_ratios = enrich.calculate_trait_enrichment(pd.DataFrame(X_thr),
+                                                                                                    trait_dummies)
+            measures_dict = {'F1 score': f1_scores,
+                             'Intersection size': intersections,
+                             'Fisher\'s exact test': fisher_pvals,
+                             'Odds ratio': odds_ratios}
+            summary_df = enrich.summarise_enrichment('F1 score', measures_dict, pd.DataFrame(X_thr), trait_dummies)
+            sorted_summary_df = summary_df.sort_values(by='F1 score', ascending=False)
+
+        sorted_summary_df.to_csv(output.summary, index=False, header=True, sep="\t")
+        f1_scores.to_csv(output.f1_scores, index=True, header=True, sep="\t")
+        intersections.to_csv(output.intersections, index=True, header=True, sep="\t")
+        odds_ratios.to_csv(output.odds_ratios, index=True, header=True, sep="\t")
+        fisher_pvals.to_csv(output.fisher_pvals, index=True, header=True, sep="\t")
+
+rule impc_pathways_df:
+    input:
+        full_pathways="analysis/IMPC/full_pathways.tsv",
+        gene_names="data/real/IMPC/{subfolder}{preprocessing}/gene_names.txt",
+    output:
+        pathways_df="data/real/IMPC/{subfolder}{preprocessing}/pathways_df.tsv",
+    run:
+        import pandas as pd
+        import biclust_comp.analysis.enrichment as enrich
+
+        full_pathways_df = pd.read_csv(input.full_pathways, sep="\t", index_col=0)
+        print(full_pathways_df.iloc[:10, :10])
+        with open(input.gene_names) as f:
+            gene_ensembl_ids = [line.strip() for line in f.readlines()]
+
+        pathways_df = enrich.construct_pathways_df(gene_ensembl_ids, full_pathways_df)
+        print(pathways_df.iloc[:10, :10])
+        print(pathways_df.shape)
+        pathways_df.to_csv(output.pathways_df, sep="\t", index=True, header=True)
+
+
+rule impc_gene_enrichment:
+    input:
+        pathways_df="data/real/IMPC/{subfolder}{preprocessing}/pathways_df.tsv",
+        B="results/{method}/real/IMPC/{subfolder}{preprocessing}/run_{run_id}/B.txt",
+    wildcard_constraints:
+        subfolder="tensor/|",
+        postprocessing=".*"
+    output:
+        intersections="analysis/IMPC/{method}/real/IMPC/{subfolder}{preprocessing}/run_{run_id}/pathways_intersections{postprocessing}.tsv",
+        odds_ratios="analysis/IMPC/{method}/real/IMPC/{subfolder}{preprocessing}/run_{run_id}/pathways_oddsratio{postprocessing}.tsv",
+        f1_scores="analysis/IMPC/{method}/real/IMPC/{subfolder}{preprocessing}/run_{run_id}/pathways_f1scores{postprocessing}.tsv",
+        fisher_pvals="analysis/IMPC/{method}/real/IMPC/{subfolder}{preprocessing}/run_{run_id}/pathways_fisherpvals{postprocessing}.tsv",
+    run:
+        import biclust_comp.analysis.enrichment as enrich
+        import biclust_comp.utils as utils
+        import pandas as pd
+
+        K_thr, X_thr, B_thr = utils.read_result_threshold(os.path.dirname(input.B),
+                                                          utils.threshold_str_to_float(wildcards.postprocessing))
+        if K_thr == 0:
+            f1_scores = pd.DataFrame()
+            intersections = pd.DataFrame()
+            odds_ratios = pd.DataFrame()
+            fisher_pvals = pd.DataFrame()
+        else:
+            pathways_df = pd.read_csv(input.pathways_df, sep="\t", index_col=0)
+            f1_scores, intersections, fisher_pvals, odds_ratios = enrich.calculate_trait_enrichment(pd.DataFrame(B_thr),
+                                                                                                    pathways_df)
+
+        f1_scores.to_csv(output.f1_scores, index=True, header=True, sep="\t")
+        intersections.to_csv(output.intersections, index=True, header=True, sep="\t")
+        odds_ratios.to_csv(output.odds_ratios, index=True, header=True, sep="\t")
+        fisher_pvals.to_csv(output.fisher_pvals, index=True, header=True, sep="\t")
+
+
+rule impc_pathway_enrichment:
+    input:
+        pathway_pvals="analysis/IMPC/{method}/real/IMPC/{subfolder}{preprocessing}/run_{run_id}/pathways_fisherpvals{postprocessing}.tsv",
+    wildcard_constraints:
+        subfolder="tensor/|",
+        postprocessing=".*"
+    output:
+        pathway_enrichment="analysis/IMPC/{method}/real/IMPC/{subfolder}{preprocessing}/run_{run_id}/pathways_summary{postprocessing}.tsv"
+    run:
+        import numpy as np
+        import pandas as pd
+        import biclust_comp.utils as utils
+
+        try:
+            pathway_pvals = pd.read_csv(input.pathway_pvals, index_col=0, sep="\t")
+        except pd.errors.EmptyDataError as e:
+            pathway_pvals = None
+
+        pathway_enrichment_dicts = []
+        if pathway_pvals is not None:
+            for factor in pathway_pvals.columns:
+                pvals = pathway_pvals.loc[:, factor]
+
+                pathway_enrichment = {'factor_index': factor,
+                                      'min_pval': min(pvals)}
+                for threshold in [1, 0.1, 0.05, 0.01, 0.001, 0.0001, 0.00001]:
+                    pathway_enrichment[f"alpha {threshold}"] = (pvals < threshold).sum()
+
+                pathway_enrichment_dicts.append(pathway_enrichment)
+
+        pathway_enrichment_df = pd.DataFrame(pathway_enrichment_dicts)
+        pathway_enrichment_df.to_csv(output.pathway_enrichment, sep="\t", index=False)
+
+
+rule impc_knockout_pathway_enrichment:
+    input:
+        ko_genes="analysis/IMPC/ko_gene_pathways.tsv",
+        pathway_pvals="analysis/IMPC/{method}/real/IMPC/{subfolder}{preprocessing}/run_{run_id}/pathways_fisherpvals{postprocessing}.tsv",
+        trait_summary="analysis/IMPC/{method}/real/IMPC/{subfolder}{preprocessing}/run_{run_id}/traits_summary{postprocessing}.tsv",
+    wildcard_constraints:
+        subfolder="tensor/|",
+        postprocessing=".*"
+    output:
+        ko_enrichment="analysis/IMPC/{method}/real/IMPC/{subfolder}{preprocessing}/run_{run_id}/ko_enrichment_summary{postprocessing}.tsv"
+    run:
+        import numpy as np
+        import pandas as pd
+        import biclust_comp.utils as utils
+
+        ko_pathway_enrichment_dicts = []
+
+        try:
+            pathway_pvals = pd.read_csv(input.pathway_pvals, index_col=0, sep="\t")
+        except pd.errors.EmptyDataError as e:
+            pathway_pvals = None
+
+        if pathway_pvals is not None:
+            ko_genes_pathways_df = pd.read_csv(input.ko_genes, sep="\t", index_col=0)
+            summary_df = pd.read_csv(input.trait_summary, sep="\t", index_col=0)
+
+            for ko_gene in ko_genes_pathways_df.index:
+                try:
+                    best_factor, f1_score = summary_df.loc[f"genotype_{ko_gene} knockout",
+                                                           ["best factor (by F1 score)", "F1 score"]]
+                except KeyError as e:
+                    print(f"{ko_gene} not included in trait summary file")
+                # If we do have this genotype, add an entry to our new df
+                else:
+                    ko_pathways = ko_genes_pathways_df.columns[np.where(ko_genes_pathways_df.loc[ko_gene, :])[0]]
+                    ko_pathway_pvals = pathway_pvals.loc[ko_pathways, :].iloc[:, int(best_factor)]
+
+                    ko_pathway_enrichment = {'trait': ko_gene,
+                                             'best_factor': best_factor,
+                                             'f1_score (trait)': f1_score,
+                                             'pathways': len(ko_pathways),
+                                             'min_pval': min(ko_pathway_pvals)}
+                    for threshold in [1, 0.1, 0.05, 0.01, 0.001, 0.0001, 0.00001]:
+                        ko_pathway_enrichment[f"alpha {threshold}"] = (ko_pathway_pvals < threshold).sum()
+                    ko_pathway_enrichment["all_pathways alpha 0.05"] = (pathway_pvals.iloc[:, int(best_factor)] < 0.05).sum()
+
+                    ko_pathway_enrichment_dicts.append(ko_pathway_enrichment)
+
+        ko_pathway_enrichment_df = pd.DataFrame(ko_pathway_enrichment_dicts)
+        ko_pathway_enrichment_df.to_csv(output.ko_enrichment, sep="\t", index=False)
+
+
+rule impc_factor_info_dataset:
+    input:
+        X="results/{method}/real/IMPC/{subfolder}{preprocessing}/run_{run_id}/X.txt",
+        B="results/{method}/real/IMPC/{subfolder}{preprocessing}/run_{run_id}/B.txt"
+    wildcard_constraints:
+        subfolder="tensor/|",
+        postprocessing=".*"
+    output:
+        factor_info="analysis/IMPC/{method}/real/IMPC/{subfolder}{preprocessing}/run_{run_id}/factor_info{postprocessing}.tsv",
+    run:
+        import os
+        import biclust_comp.analysis.accuracy as acc
+
+        df = acc.construct_factor_info_threshold(os.path.dirname(input.X),
+                                                 utils.threshold_str_to_float(wildcards.postprocessing))
+        df.to_csv(output[0], index=True, header=True, sep="\t")
+
+
+def input_for_summarise_analysis(wildcards):
+    no_thresh_string = utils.threshold_float_to_str(0)
+    unthresholded_runids = [f"analysis/IMPC/{dataset_method_runid}/{wildcards.analysis_file}{no_thresh_string}.tsv"
+                            for dataset_method_runid in IMPC_ANALYSIS_DATASET_METHOD_RUNIDS]
+    thresholded_runids = [f"analysis/IMPC/{dataset_method_runid}/{wildcards.analysis_file}{utils.threshold_float_to_str(thresh)}.tsv"
+                          for dataset_method_runid in IMPC_ANALYSIS_DATASET_METHOD_RUNIDS_RAW
+                          for thresh in [1e-4, 1e-3, 1e-2, 1e-1, 5e-1, 1]]
+    return unthresholded_runids + thresholded_runids
+
+rule impc_summarise_analysis:
+    input:
+        input_for_summarise_analysis
+    output:
+        "analysis/IMPC/summarised_{analysis_file}.tsv"
+    wildcard_constraints:
+        analysis_file="factor_info|traits_summary|pathways_summary|traits_fisherpvals|traits_f1scores|ko_enrichment_summary"
+    log:
+        "logs/analysis/IMPC/summarised_{analysis_file}.log"
+    run:
+        import biclust_comp.analysis.enrichment as enrich
+        import biclust_comp.logging_utils as logging_utils
+
+        logging_utils.setup_logging(3, logfile=log[0])
+        analysis_file_combine_functions = {
+            'factor_info': enrich.summarise_factor_info_IMPC,
+            'traits_summary': enrich.summarise_traits_summary_IMPC,
+            'pathways_summary': enrich.summarise_pathways_summary_IMPC,
+            'traits_fisherpvals': enrich.summarise_traits_fisherpvals_IMPC,
+            'traits_f1scores': enrich.summarise_traits_f1scores_IMPC,
+            'ko_enrichment_summary': enrich.summarise_ko_enrichment_summary_IMPC,
+        }
+        combine_function = analysis_file_combine_functions[wildcards.analysis_file]
+        combined = combine_function(f"analysis/IMPC")
+        combined.to_csv(output[0], index=False, header=True, sep="\t")
+
+rule impc_accuracy_exact_thresholds:
+    input:
+        dfs=expand("analysis/IMPC/{dataset}/{method}/exact_accuracy_thresholds.csv",
+                   dataset=config['IMPC_DATASETS'],
+                   method=config['METHODS'])
+    output:
+        "analysis/IMPC/exact_accuracy_thresholds.tsv"
+    run:
+        import pandas as pd
+        error_dfs = [pd.read_csv(file) for file in input.dfs]
+        combined_df = pd.concat(error_dfs)
+        combined_df.to_csv(output[0], index=False, sep="\t")
+
+rule impc_accuracy_exact_thresholds_dataset:
+    input:
+        "data/{dataset}/Y.txt",
+    log:
+        "logs/analysis/IMPC/{dataset}/{method}/exact_accuracy_thresholds.log"
+    output:
+        "analysis/IMPC/{dataset}/{method}/exact_accuracy_thresholds.csv"
+    run:
+        import biclust_comp.analysis.accuracy as acc
+        import biclust_comp.logging_utils as logging_utils
+
+        logging_utils.setup_logging(3, logfile=log[0])
+        df = acc.compare_exact_thresholds_real(wildcards.dataset, [wildcards.method])
+        df.to_csv(output[0], index=False, header=True)
+
+rule impc_combine_analysis:
+    input:
+        expand("analysis/IMPC/{analysis_file}.tsv",
+               analysis_file=['exact_accuracy_thresholds', 'summarised_factor_info', 'summarised_traits_summary',
+                              'summarised_pathways_summary', 'summarised_traits_fisherpvals',
+                              'summarised_traits_f1scores', 'summarised_ko_enrichment_summary'])
+    log:
+        "logs/analysis/IMPC/impc_combine_analysis.log"
+    output:
+        combined="analysis/IMPC/combined_error_ext.tsv"
+    run:
+        import biclust_comp.logging_utils as logging_utils
+        import biclust_comp.analysis.impc_plots as impc_plots
+
+        logging_utils.setup_logging(3, logfile=log[0])
+        combined_df = impc_plots.setup_combined_df_IMPC(list(input))
+        combined_df.to_csv(output.combined, sep="\t", index=False, header=True)
+
+rule impc_benchmark:
+    output:
+        df="analysis/IMPC/benchmark.csv"
+    run:
+        import biclust_comp.analysis.benchmarking as bm
+        import biclust_comp.analysis.accuracy_utils as acc_utils
+
+        df = bm.construct_combined_df(config['IMPC_DATASET_METHOD_RUNIDS'],
+                                      deduce_TNG=False)
+        df = acc_utils.improve_method_info(df.reset_index())
+        df.to_csv(output.df)
+
+rule impc_similarity:
+    # This data frame is a marker that we've finished with all runs
+    input:
+        rules.impc_results.input,
+        run_ids="analysis/IMPC/run_list_{run_list}.txt"
+    log:
+        "logs/analysis/IMPC/similarity_{run_list}.log"
+    output:
+        df="analysis/IMPC/similarity_{run_list}.csv"
+    run:
+        import biclust_comp.analysis.robustness as rob
+        import biclust_comp.logging_utils as lu
+        lu.setup_logging(3, log[0])
+
+        df = rob.calculate_similarity_between_runs_file(input.run_ids)
+        df.to_csv(output.df, index=True, header=True)
+
+rule impc_similarity_df:
+    input:
+        expand("analysis/IMPC/similarity_{method}_nontensor_log.csv",
+               method=config['NONTENSOR_METHODS']),
+        expand("analysis/IMPC/similarity_{method}_tensor_log.csv",
+               method=config['METHODS']),
+    output:
+        df="analysis/IMPC/similarity_methods.csv",
+    run:
+        import biclust_comp.analysis.simulated_plots as sim_plots
+        df = sim_plots.construct_similarity_matrix(input)
+        df.to_csv(output.df, index=False)
+
+rule impc_run_list:
+    input:
+        runs="analysis/IMPC/expected_method_dataset_run_ids.txt"
+    wildcard_constraints:
+        run_list='|'.join(config['IMPC_RUN_LISTS'])
+    output:
+        runs="analysis/IMPC/run_list_{run_list}.txt"
+    run:
+        import os
+
+        command_parts = [f"cat {input.runs}"]
+        for search_str in config['IMPC_RUN_LISTS'][wildcards.run_list]:
+            command_parts.append(f"grep {search_str}")
+
+        command = ' | '.join(command_parts)
+        command += f" > {output.runs}"
+        print(command)
+
+        os.system(command)
+
+rule impc_run_list_method_tensor:
+    input:
+        runs="analysis/IMPC/expected_method_dataset_run_ids.txt"
+    wildcard_constraints:
+        method='|'.join(config['METHODS'])
+    output:
+        runs="analysis/IMPC/run_list_{method}_nontensor_log.txt"
+    shell:
+        "grep -v 'tensor' {input.runs} | grep 'log' | grep {wildcards.method} > {output.runs}"
+
+rule impc_run_list_method_nontensor:
+    input:
+        runs="analysis/IMPC/expected_method_dataset_run_ids.txt"
+    wildcard_constraints:
+        method='|'.join(config['METHODS'])
+    output:
+        runs="analysis/IMPC/run_list_{method}_tensor_log.txt"
+    shell:
+        "grep 'tensor' {input.runs} | grep 'log' | grep {wildcards.method} > {output.runs}"
+
+rule impc_failure_counts_table:
+    input:
+        df="analysis/IMPC/{results_file}_results.csv",
+    output:
+        table="analysis/latex_tables/IMPC/{results_file}_failures_latex.txt"
+    run:
+        import biclust_comp.analysis.summarise_results as sr
+
+        sr.output_latex_table_failure_counts(input.df, output.table, name='IMPC')
+
+rule impc_largest_tissue_prop:
+    input:
+        txt="analysis/IMPC/expected_method_dataset_run_ids.txt"
+    output:
+        df="analysis/IMPC/largest_tissue_prop_all.csv"
+    run:
+        import biclust_comp.analysis.impc_plots as impc_plots
+        with open(input.txt, 'r') as f:
+            all_mdrs = f.read().splitlines()
+
+        df = impc_plots.impc_largest_tissue_prop(all_mdrs)
+
+        df.to_csv(output.df, index=False)
+
+rule impc_unique_factors:
+    input:
+        df="analysis/IMPC/restricted_results.csv",
+    output:
+        df="analysis/IMPC/restricted_results_with_num_unique_factors.csv",
+    run:
+        import biclust_comp.analysis.unique_factors as uf
+        df = uf.get_results_with_num_unique(input.df)
+        df.to_csv(output.df, index=False)

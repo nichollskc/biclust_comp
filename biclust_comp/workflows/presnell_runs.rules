@@ -1,0 +1,36 @@
+configfile: f"{config['BICLUST_COMP_SCRIPTS']}/biclust_comp/workflows/snakemake_presnell_config.yml"
+
+method_to_K_name = {'SDA':      'num_comps',
+                    'nsNMF':    'rank',
+                    'SNMF':     'rank',
+                    'FABIA':    'n_clusters'}
+method_to_seed_dict_fn = {'SDA': (lambda seed: {'set_seed': f"{seed} {seed * 2}"}),
+                          'MultiCluster': (lambda seed: {}),
+                          'FABIA': (lambda seed: {'random_state': seed})}
+method_to_K_config_list = {'SSLB':     'OVERESTIMATE',
+                           'BicMix':   'OVERESTIMATE',
+                           'BicMix_qnorm0':   'OVERESTIMATE'}
+
+PRESNELL_CONFIG_DICT, PRESNELL_DATASETS = get_all_real_runs_group(config['PRESNELL'])
+config['PARAMETERS'].update(PRESNELL_CONFIG_DICT)
+config['PRESNELL_DATASETS'] = list(PRESNELL_DATASETS)
+config['PRESNELL_DATASET_METHOD_RUNIDS'] = list(PRESNELL_CONFIG_DICT.keys())
+config['PRESNELL_DATASET_METHOD_RUNIDS_RAW'] = [key for key in PRESNELL_CONFIG_DICT.keys()
+                                            if not key.startswith('Plaid')]
+
+PRESNELL_METHODS, PRESNELL_SUBFOLDERS, PRESNELL_RUNIDS = glob_wildcards("results/{method}/real/presnell/{subfolder_preprocessing}/run_{run_id}/X.txt")
+PRESNELL_ANALYSIS_DATASET_METHOD_RUNIDS = []
+PRESNELL_ANALYSIS_DATASET_METHOD_RUNIDS_RAW = []
+for i in range(len(PRESNELL_METHODS)):
+    dataset_method_runid = f"{PRESNELL_METHODS[i]}/real/presnell/PRESNELL/{PRESNELL_SUBFOLDERS[i]}/run_{PRESNELL_RUNIDS[i]}"
+    if dataset_method_runid in config['PRESNELL_DATASET_METHOD_RUNIDS']:
+        PRESNELL_ANALYSIS_DATASET_METHOD_RUNIDS.append(dataset_method_runid)
+    if dataset_method_runid in config['PRESNELL_DATASET_METHOD_RUNIDS_RAW']:
+        PRESNELL_ANALYSIS_DATASET_METHOD_RUNIDS_RAW.append(dataset_method_runid)
+
+rule real_generate_expected_runids_all:
+    output:
+        txt="analysis/presnell/expected_method_dataset_run_ids_all.txt"
+    run:
+        with open(output.txt, 'w') as f:
+            f.write('\n'.join(config['PRESNELL_DATASET_METHOD_RUNIDS']))

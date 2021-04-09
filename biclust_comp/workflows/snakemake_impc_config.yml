@@ -1,0 +1,98 @@
+IMPC:
+  'single_tissue':
+    DATASETS:
+      - 'real/IMPC/liver/log/small_pathways'
+    METHODS: ['BicMix', 'FABIA', 'Plaid', 'SSLB', 'SNMF', 'nsNMF']
+    K_init:
+      NORMAL: [50, 100, 150]
+      OVERESTIMATE: [50, 100, 150]
+    run_seeds: [1024, 4321, 1313]
+  'deseq':
+    DATASETS:
+      - 'real/IMPC/deseq/log/small_pathways'
+      - 'real/IMPC/deseq/raw/small_pathways'
+    METHODS: ['BicMix', 'FABIA', 'Plaid', 'SSLB', 'SNMF', 'nsNMF']
+    K_init:
+      NORMAL: [50, 100, 150]
+      OVERESTIMATE: [50, 100, 150]
+    run_seeds: [1024, 4321, 1313]
+  'quantnorm':
+    DATASETS:
+      - 'real/IMPC/quantnorm/pooled/5000'
+      - 'real/IMPC/quantnorm/pooled_log/5000'
+      - 'real/IMPC/quantnorm/pooled_cv/5000'
+      - 'real/IMPC/quantnorm/pooled/10000'
+      - 'real/IMPC/quantnorm/small_pathways'
+    # Exclude tensor methods and NMF methods
+    METHODS: ['BicMix', 'FABIA', 'Plaid', 'SSLB']
+    K_init:
+      NORMAL: [20, 50, 150]
+      OVERESTIMATE: [50, 200]
+    run_seeds: [1024]
+  'scaled':
+    DATASETS:
+      - 'real/IMPC/scaled/pooled/5000'
+      - 'real/IMPC/scaled/pooled_log/5000'
+      - 'real/IMPC/scaled/pooled_cv/5000'
+      - 'real/IMPC/scaled/pooled/10000'
+      - 'real/IMPC/scaled/small_pathways'
+    # Exclude tensor methods
+    METHODS: ['BicMix', 'FABIA', 'nsNMF', 'Plaid', 'SNMF', 'SSLB']
+    K_init:
+      NORMAL: [20, 50, 150]
+      OVERESTIMATE: [50, 200]
+    run_seeds: [1024]
+  'log':
+    DATASETS:
+      - 'real/IMPC/log/pooled/5000'
+      - 'real/IMPC/log/pooled_log/5000'
+      - 'real/IMPC/log/pooled_cv/5000'
+      - 'real/IMPC/log/pooled/10000'
+      - 'real/IMPC/log/small_pathways'
+    # Exclude tensor methods
+    METHODS: ['BicMix', 'FABIA', 'nsNMF', 'Plaid', 'SNMF', 'SSLB']
+    K_init:
+      NORMAL: [20, 50, 150]
+      OVERESTIMATE: [50, 200]
+    run_seeds: [1024]
+  'tensor_quantnorm':
+    DATASETS:
+      - 'real/IMPC/tensor/quantnorm/pooled/5000'
+      - 'real/IMPC/tensor/quantnorm/pooled_log/5000'
+      - 'real/IMPC/tensor/quantnorm/pooled_cv/5000'
+      - 'real/IMPC/tensor/quantnorm/pooled/10000'
+      - 'real/IMPC/tensor/quantnorm/small_pathways'
+    METHODS: ['BicMix', 'FABIA', 'MultiCluster', 'Plaid', 'SDA', 'SSLB']
+    K_init:
+      NORMAL: [10, 20, 80]
+      OVERESTIMATE: [50, 200]
+    run_seeds: [1024]
+  'tensor_scaled':
+    DATASETS:
+      - 'real/IMPC/tensor/scaled/pooled/5000'
+      - 'real/IMPC/tensor/scaled/pooled_log/5000'
+      - 'real/IMPC/tensor/scaled/pooled_cv/5000'
+      - 'real/IMPC/tensor/scaled/pooled/10000'
+      - 'real/IMPC/tensor/scaled/small_pathways'
+    METHODS: ['BicMix', 'FABIA', 'MultiCluster', 'nsNMF', 'Plaid', 'SDA', 'SNMF', 'SSLB']
+    K_init:
+      NORMAL: [10, 20, 80]
+      OVERESTIMATE: [50, 200]
+    run_seeds: [1024]
+  'tensor_log':
+    DATASETS:
+      - 'real/IMPC/tensor/log/pooled/5000'
+      - 'real/IMPC/tensor/log/pooled_log/5000'
+      - 'real/IMPC/tensor/log/pooled_cv/5000'
+      - 'real/IMPC/tensor/log/pooled/10000'
+      - 'real/IMPC/tensor/log/small_pathways'
+    METHODS: ['BicMix', 'FABIA', 'MultiCluster', 'nsNMF', 'Plaid', 'SDA', 'SNMF', 'SSLB']
+    K_init:
+      NORMAL: [10, 20, 80]
+      OVERESTIMATE: [50, 200]
+    run_seeds: [1024]
+
+PARAMETERS:
+  FABIA:
+    spz: 1.5
+

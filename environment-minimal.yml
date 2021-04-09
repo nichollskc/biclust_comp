@@ -1,0 +1,33 @@
+name: biclustering_comparison
+channels:
+  - bioconda
+  - r
+  - conda-forge
+dependencies:
+  - bioconda::snakemake-minimal=5.26.1
+  - conda-forge::r-rcpparmadillo=0.9.800.1.0    # Needed for install of SSLB
+  - conda-forge::r-rcpp=1.0.3    # Needed for install of SSLB
+  - conda-forge::ggrepel
+  - r::r-ggplot2
+  - conda-forge::r-cowplot=1.1.1
+  - r::r-clue
+  - r::r-gridExtra
+  - r::r-remotes                        # Needed to install SSLB from github
+  - r::r-mvtnorm
+  - r::r-jsonlite
+  - r::r-ggridges
+  - conda-forge::r-biclust    # For plaid model and some visualisation
+  - conda-forge::adjusttext
+  - anaconda::cython
+  - matplotlib
+  - seaborn
+  - pandas
+  - pip
+  - scikit-learn=0.22.1     # Pyfabia imports something from six library, which is only in <0.22
+  - nose
+  - pylint
+  - junit-xml
+  - conda-forge::munkres
+  - conda-forge::statsmodels
+  - conda-forge::plotnine
+  - bioconda::intermine

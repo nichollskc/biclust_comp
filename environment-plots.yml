@@ -1,0 +1,23 @@
+name: biclust_comp_plots
+channels:
+  - bioconda
+  - r
+  - conda-forge
+dependencies:
+  - bioconda::snakemake-minimal=5.26.1
+  - matplotlib
+  - pandas
+  - scikit-learn=0.22.1     # Pyfabia imports something from six library, which is only in <0.22
+  - statsmodels
+  - scipy
+  - conda-forge::munkres
+  - conda-forge::statsmodels
+  - conda-forge::plotnine
+  - bioconda::intermine
+  - junit-xml # Testing
+  - r::r-ggplot2
+  - r::r-ggridges
+  - r::r-dplyr
+  - r::r-plyr
+  - conda-forge::r-cowplot=1.1.1
+  - conda-forge::r-ggrepel

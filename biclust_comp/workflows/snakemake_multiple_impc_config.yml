@@ -1,0 +1,57 @@
+IMPC:
+  'multiple_runs_log':
+    DATASETS:
+      - 'real/IMPC/log/small_pathways'
+    METHODS: ['BicMix', 'FABIA', 'nsNMF', 'Plaid', 'SNMF', 'SSLB']
+    K_init:
+      NORMAL: [50, 200]
+      OVERESTIMATE: [50, 200]
+    run_seeds: [1024, 4321, 1234, 5151, 6262, 1313, 8080, 5678, 2345, 3456]
+  'multiple_runs_log_tensor':
+    DATASETS:
+      - 'real/IMPC/tensor/log/small_pathways'
+    METHODS: ['BicMix', 'FABIA', 'MultiCluster', 'nsNMF', 'Plaid', 'SDA', 'SNMF', 'SSLB']
+    K_init:
+      NORMAL: [50, 200]
+      OVERESTIMATE: [50, 200]
+    run_seeds: [1024, 4321, 1234, 5151, 6262, 1313, 8080, 5678, 2345, 3456]
+  'multiple_runs_deseq_sf':
+    DATASETS:
+      - 'real/IMPC/deseq_sf/raw/small_pathways'
+    METHODS: ['BicMix', 'FABIA', 'nsNMF', 'Plaid', 'SNMF', 'SSLB']
+    K_init:
+      NORMAL: [50, 200]
+      OVERESTIMATE: [50, 200]
+    run_seeds: [1024, 4321, 1234, 5151, 6262, 1313, 8080, 5678, 2345, 3456]
+  'multiple_runs_deseq_sf_tensor':
+    DATASETS:
+      - 'real/IMPC/tensor/deseq_sf/raw/small_pathways'
+    METHODS: ['BicMix', 'FABIA', 'MultiCluster', 'nsNMF', 'Plaid', 'SDA', 'SNMF', 'SSLB']
+    K_init:
+      NORMAL: [50, 200]
+      OVERESTIMATE: [50, 200]
+    run_seeds: [1024, 4321, 1234, 5151, 6262, 1313, 8080, 5678, 2345, 3456]
+  'multiple_runs_qnorm':
+    DATASETS:
+      - 'real/IMPC/quantnorm/small_pathways'
+    METHODS: ['BicMix', 'FABIA', 'Plaid', 'SSLB']
+    K_init:
+      NORMAL: [50, 200]
+      OVERESTIMATE: [50, 200]
+    run_seeds: [1024, 4321, 1234, 5151, 6262, 1313, 8080, 5678, 2345, 3456]
+  'multiple_runs_qnorm_tensor':
+    DATASETS:
+      - 'real/IMPC/tensor/quantnorm/small_pathways'
+    METHODS: ['BicMix', 'FABIA', 'MultiCluster', 'Plaid', 'SDA', 'SSLB']
+    K_init:
+      NORMAL: [50, 200]
+      OVERESTIMATE: [50, 200]
+    run_seeds: [1024, 4321, 1234, 5151, 6262, 1313, 8080, 5678, 2345, 3456]
+
+IMPC_RUN_LISTS:
+  'TENSOR_LOG': ["'tensor/log'"]
+  'TEST': ["'tensor/quantnorm'", "'SSLB'", "'1024'"]
+
+PARAMETERS:
+  FABIA:
+    spz: 1.5

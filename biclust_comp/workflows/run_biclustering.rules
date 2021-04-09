@@ -1,0 +1,195 @@
+rule run_bicmix:
+    input:
+        Y="data/{dataset}/Y.txt"
+    params:
+        lambda wildcards: get_method_parameters('BicMix', wildcards)
+    log:
+        "logs/BicMix/{dataset}/run_{run_id}.log"
+    benchmark:
+        "results/BicMix/{dataset}/run_{run_id}/benchmark.txt"
+    output:
+        X="results/BicMix/{dataset}/run_{run_id}/X.txt",
+        B="results/BicMix/{dataset}/run_{run_id}/B.txt",
+        K="results/BicMix/{dataset}/run_{run_id}/K.txt",
+        params="results/BicMix/{dataset}/run_{run_id}/params.json"
+    script:
+        f"{config['BICLUST_COMP_SCRIPTS']}/biclust_comp/methods/BicMix.R"
+
+rule run_sslb:
+    input:
+        Y="data/{dataset}/Y.txt"
+    params:
+        lambda wildcards: get_method_parameters('SSLB', wildcards)
+    log:
+        "logs/SSLB/{dataset}/run_{run_id}.log"
+    benchmark:
+        "results/SSLB/{dataset}/run_{run_id}/benchmark.txt"
+    output:
+        X="results/SSLB/{dataset}/run_{run_id}/X.txt",
+        B="results/SSLB/{dataset}/run_{run_id}/B.txt",
+        K="results/SSLB/{dataset}/run_{run_id}/K.txt",
+        params="results/SSLB/{dataset}/run_{run_id}/params.json"
+    script:
+        f"{config['BICLUST_COMP_SCRIPTS']}/biclust_comp/methods/SSLB.R"
+
+rule run_fabia:
+    input:
+        Y="data/{dataset}/Y.txt"
+    params:
+        lambda wildcards: get_method_parameters('FABIA', wildcards)
+    log:
+        "logs/FABIA/{dataset}/run_{run_id}.log"
+    benchmark:
+        "results/FABIA/{dataset}/run_{run_id}/benchmark.txt"
+    output:
+        X="results/FABIA/{dataset}/run_{run_id}/X.txt",
+        B="results/FABIA/{dataset}/run_{run_id}/B.txt",
+        K="results/FABIA/{dataset}/run_{run_id}/K.txt",
+        params="results/FABIA/{dataset}/run_{run_id}/params.json"
+    script:
+        f"{config['BICLUST_COMP_SCRIPTS']}/biclust_comp/methods/fabia.py"
+
+rule run_plaid:
+    input:
+        Y="data/{dataset}/Y.txt"
+    params:
+        lambda wildcards: get_method_parameters('Plaid', wildcards)
+    log:
+        "logs/Plaid/{dataset}/run_{run_id}.log"
+    benchmark:
+        "results/Plaid/{dataset}/run_{run_id}/benchmark.txt"
+    output:
+        X="results/Plaid/{dataset}/run_{run_id}/X.txt",
+        B="results/Plaid/{dataset}/run_{run_id}/B.txt",
+        K="results/Plaid/{dataset}/run_{run_id}/K.txt",
+        params="results/Plaid/{dataset}/run_{run_id}/params.json"
+    script:
+        f"{config['BICLUST_COMP_SCRIPTS']}/biclust_comp/methods/Plaid.R"
+
+rule run_nsNMF:
+    input:
+        Y="data/{dataset}/Y.txt"
+    params:
+        lambda wildcards: get_method_parameters('nsNMF', wildcards)
+    log:
+        "logs/nsNMF/{dataset}/run_{run_id}.log"
+    benchmark:
+        "results/nsNMF/{dataset}/run_{run_id}/benchmark.txt"
+    output:
+        X="results/nsNMF/{dataset}/run_{run_id}/X.txt",
+        B="results/nsNMF/{dataset}/run_{run_id}/B.txt",
+        K="results/nsNMF/{dataset}/run_{run_id}/K.txt",
+        params="results/nsNMF/{dataset}/run_{run_id}/params.json"
+    script:
+        f"{config['BICLUST_COMP_SCRIPTS']}/biclust_comp/methods/nsNMF.py"
+
+rule run_SNMF:
+    input:
+        Y="data/{dataset}/Y.txt"
+    params:
+        lambda wildcards: get_method_parameters('SNMF', wildcards)
+    log:
+        "logs/SNMF/{dataset}/run_{run_id}.log"
+    benchmark:
+        "results/SNMF/{dataset}/run_{run_id}/benchmark.txt"
+    output:
+        X="results/SNMF/{dataset}/run_{run_id}/X.txt",
+        B="results/SNMF/{dataset}/run_{run_id}/B.txt",
+        K="results/SNMF/{dataset}/run_{run_id}/K.txt",
+        params="results/SNMF/{dataset}/run_{run_id}/params.json"
+    script:
+        f"{config['BICLUST_COMP_SCRIPTS']}/biclust_comp/methods/SNMF.py"
+
+rule run_multicluster:
+    input:
+        Y="data/{dataset}/Y.txt",
+        N="data/{dataset}/N.txt"
+    params:
+        values=lambda wildcards: get_method_parameters('MultiCluster', wildcards)
+    log:
+        "logs/MultiCluster/{dataset}/run_{run_id}.log"
+    benchmark:
+        "results/MultiCluster/{dataset}/run_{run_id}/benchmark.txt"
+    output:
+        A="results/MultiCluster/{dataset}/run_{run_id}/A.txt",
+        B="results/MultiCluster/{dataset}/run_{run_id}/B.txt",
+        Z="results/MultiCluster/{dataset}/run_{run_id}/Z.txt",
+        K="results/MultiCluster/{dataset}/run_{run_id}/K.txt",
+        X="results/MultiCluster/{dataset}/run_{run_id}/X.txt",
+        params="results/MultiCluster/{dataset}/run_{run_id}/params.json"
+    run:
+        import json
+        from biclust_comp import utils
+
+        output_files_struct = dict_to_matlab_struct(output)
+        params_struct = dict_to_matlab_struct(params.values)
+
+        # Save parameters to json file
+        params_dict = params.values
+        params_dict.update({'data_file': input.Y})
+        print(f"Parameters from snakemake: {params}")
+        with open(output.params, 'w') as f:
+            json.dump(params_dict, f, indent=2)
+
+        shell("matlab -nodisplay -nosplash -r" \
+        " \"try, runMultiCluster('{input.Y}', {output_files_struct}, {params_struct}, '{input.N}'), " \
+        "catch me, fprintf('%s / %s\\n',me.identifier,me.message), exit(1), end, exit(0)\" > {log} 2>&1")
+
+        utils.save_reconstructed_X(output.A, output.Z, output.X)
+
+rule run_sda:
+    input:
+        Y="data/{dataset}/Y.txt",
+        N="data/{dataset}/N.txt"
+    params:
+        values=lambda wildcards: get_method_parameters('SDA', wildcards)
+    log:
+        "logs/SDA/{dataset}/run_{run_id}.log"
+    benchmark:
+        "results/SDA/{dataset}/run_{run_id}/benchmark.txt"
+    output:
+        results_dir=directory("results/SDA/{dataset}/run_{run_id}/output"),
+        A="results/SDA/{dataset}/run_{run_id}/A.txt",
+        B="results/SDA/{dataset}/run_{run_id}/B.txt",
+        Z="results/SDA/{dataset}/run_{run_id}/Z.txt",
+        K="results/SDA/{dataset}/run_{run_id}/K.txt",
+        X="results/SDA/{dataset}/run_{run_id}/X.txt",
+        params="results/SDA/{dataset}/run_{run_id}/params.json"
+    run:
+        import json
+        from biclust_comp import utils
+
+        # Create the directory for SDA to store its results - snakemake will have deleted it
+        # just before the rule is run
+        shell("mkdir {output.results_dir}")
+
+        # Read in N - the number of individuals
+        with open(input.N, 'r') as f:
+            N = int(f.read().strip())
+
+        # Construct the argument string from the set of parameters
+        params_dict = params.values
+        params_dict.update({'N': N})
+        arguments_str = dict_to_command_line_args(params.values)
+
+        # Save parameters to json file
+        params_dict.update({'data_file': input.Y})
+        print(f"Parameters from snakemake: {params}")
+        with open(output.params, 'w') as f:
+            json.dump(params_dict, f, indent=2)
+
+        # Run SDA
+        from sys import platform
+        if platform == "linux" or platform == "linux2":
+            # linux
+            executable = "sda/bin/sda_static_linux"
+        elif platform == "darwin":
+            # OS X
+            executable = "sda/bin/sda_static_osx"
+        shell(f"{executable} --data {input.Y} {arguments_str} --out {output.results_dir} > {log} 2>&1")
+
+        # SDA outputs files in folders named after iterations e.g. iter_XXXX
+        # Run a script to find the latest iteration and copy the files to the right place
+        shell(f"{config['BICLUST_COMP_SCRIPTS']}/biclust_comp/methods/copy_sda_output.sh {output} >> {log} 2>&1")
+
+        utils.save_reconstructed_X(output.A, output.Z, output.X)

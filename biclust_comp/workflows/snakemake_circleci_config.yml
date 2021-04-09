@@ -1,0 +1,76 @@
+# Additional config file for snakemake runs on CircleCI
+# Usage: snakemake --configfile biclust_comp/workflows/snakemake_testing_config.yml biclust_comp/workflows/snakemake_circleci_config.yml
+# This will use the default config file, but overwrite the variables listed here
+METHODS:
+  # BicMix often runs slowly on CircleCI
+  #- 'BicMix'
+  # FABIA runs slowly on CircleCI
+  #- 'FABIA'
+  # MultiCluster requires Matlab, which CircleCI can't use
+  #- 'MultiCluster'
+  - 'nsNMF'
+  - 'Plaid'
+  #- 'SDA'
+  #  - 'SNMF'
+  # SSLB started hanging on certain datasets
+  #- 'SSLB'
+
+TEST_DATASETS:
+  tests/simple_gaussian:
+    # BicMix often runs slowly on CircleCI
+    #- 'BicMix'
+    # FABIA runs slowly on CircleCI
+    #- 'FABIA'
+    # MultiCluster requires Matlab, which CircleCI can't use
+    #- 'MultiCluster'
+    # This simple dataset has negative values so can't be used with NMF methods
+    #- 'nsNMF'
+    - 'Plaid'
+    - 'SDA'
+    # This simple dataset has negative values so can't be used with NMF methods
+    #- 'SNMF'
+    # SSLB started hanging on certain datasets
+    #- 'SSLB'
+
+  tests/simple_negbin:
+    # BicMix often runs slowly on CircleCI
+    #- 'BicMix'
+    # FABIA runs slowly on CircleCI
+    #- 'FABIA'
+    # MultiCluster requires Matlab, which CircleCI can't use
+    #- 'MultiCluster'
+    - 'nsNMF'
+    - 'Plaid'
+    - 'SDA'
+    - 'SNMF'
+    # This simple dataset has rows that are all 0, which SSLB can't cope with
+    #- 'SSLB'
+
+  tests/multifactor:
+    # BicMix often runs slowly on CircleCI
+    #- 'BicMix'
+    # FABIA runs slowly on CircleCI
+    #- 'FABIA'
+    # MultiCluster requires Matlab, which CircleCI can't use
+    #- 'MultiCluster'
+    - 'nsNMF'
+    - 'Plaid'
+    - 'SDA'
+    - 'SNMF'
+    # SSLB started hanging on certain datasets
+    #- 'SSLB'
+
+BENCHMARK_METHODS:
+  # BicMix often runs slowly on CircleCI
+  #- 'BicMix'
+  # FABIA runs slowly on CircleCI
+  #- 'FABIA'
+  # MultiCluster requires Matlab, which CircleCI can't use
+  #- 'MultiCluster'
+  #- 'nsNMF'
+  #- 'Plaid'
+  - 'SDA'
+  - 'SNMF'
+  # SSLB started hanging on certain datasets
+  #- 'SSLB'
+

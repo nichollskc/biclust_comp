@@ -1,0 +1,247 @@
+METHODS:
+  - 'BicMix'
+  - 'FABIA'
+  - 'MultiCluster'
+  - 'nsNMF'
+  - 'Plaid'
+  - 'SDA'
+  - 'SNMF'
+  - 'SSLB'
+
+NONTENSOR_METHODS:
+  - 'BicMix'
+  - 'FABIA'
+  - 'nsNMF'
+  - 'Plaid'
+  - 'SNMF'
+  - 'SSLB'
+
+DATASETS:
+  - 'sim1_sparse_dense'
+
+SIMULATED:
+  bic_sizes:
+    mixed: [0.01, 0.1, 0.2, 0.5, 1]
+    mixed_small: [0.05, 0.1, 0.15]
+    mixed_large: [0.3, 0.5, 0.9]
+  sim_seeds: [1234, 1313, 1719]
+  run_seeds: [6363, 4321, 6546]
+  K_init:
+    NORMAL: [10, 20]
+    OVERESTIMATE: [10, 25, 40]
+  all_dataset_groups: ['BASE', 'SPARSITY', 'OTHER_K', 'NOISE', 'SIZE', 'LARGE', 'SIMPLE', 'K_SWEEP', 'SHIFT_SCALE']
+  main_dataset_groups: ['BASE', 'SPARSITY', 'OTHER_K', 'NOISE', 'SIZE', 'LARGE']
+  dataset_groups:
+    BASE:
+      datasets:
+        # Standard size is K20_N10_G1000_T10
+        - 'simulated/constant_negbin/size_mixed/K20_N10_G1000_T10'
+    SIMPLE:
+      datasets:
+        - 'simulated/constant/size_mixed_large/K5_N10_G1000_T10'
+        - 'simulated/constant/size_mixed_large/K1_N10_G1000_T10'
+        - 'simulated/constant/size_mixed_large/K2_N10_G1000_T10'
+        - 'simulated/moran_gaussian/moran_spare_dense/K10_N30_G1000_T10'
+        - 'simulated/moran_gaussian/moran_spare_dense/K15_N300_G1000_T1'
+        - 'simulated/moran_gaussian/moran_spare_dense/K15_N30_G1000_T10'
+        - 'simulated/moran_gaussian/moran_spare_dense/K5_N10_G1000_T10'
+    SPARSITY:
+      datasets:
+        # Different sizes of bicluster
+        - 'simulated/constant_negbin/size_mixed_small/K20_N10_G1000_T10'
+        - 'simulated/constant_negbin/square_size_mixed_small/K20_N10_G1000_T10'
+        - 'simulated/constant_negbin/size_mixed/K20_N10_G1000_T10'
+        - 'simulated/constant_negbin/size_mixed_large/K20_N10_G1000_T10'
+        - 'simulated/constant_negbin/square_size_mixed_large/K20_N10_G1000_T10'
+    K_SWEEP:
+      datasets:
+        # Different K
+        - 'simulated/constant_negbin/size_mixed/K5_N10_G1000_T10'
+        - 'simulated/constant_negbin/size_mixed/K10_N10_G1000_T10'
+        - 'simulated/constant_negbin/size_mixed/K20_N10_G1000_T10'
+        - 'simulated/constant_negbin/size_mixed/K50_N10_G1000_T10'
+        - 'simulated/constant_negbin/size_mixed/K70_N10_G1000_T10'
+      K_init:
+        NORMAL: [5, 10, 20, 50, 70, 100]
+        OVERESTIMATE: [5, 10, 20, 50, 70, 100]
+    OTHER_K:
+      datasets:
+        # Different K
+        - 'simulated/constant_negbin/size_mixed/K5_N10_G1000_T10'
+        - 'simulated/constant_negbin/size_mixed/K10_N10_G1000_T10'
+        - 'simulated/constant_negbin/size_mixed/K20_N10_G1000_T10'
+        - 'simulated/constant_negbin/size_mixed/K50_N10_G1000_T10'
+        - 'simulated/constant_negbin/size_mixed/K70_N10_G1000_T10'
+        - 'simulated/constant_negbin/size_mixed/K100_N300_G10000_T20'
+        - 'simulated/constant_negbin/size_mixed/K400_N300_G10000_T20'
+      K_init:
+        NORMAL: [5, 10, 20, "identity"]
+        OVERESTIMATE: [10, 25, 40, "add_10", 500]
+    NOISE:
+      datasets:
+        # Different noise types
+        - 'simulated/constant_negbin/size_mixed/K20_N10_G1000_T10'
+        - 'simulated/constant_negbin_1e-1/size_mixed/K20_N10_G1000_T10'
+        - 'simulated/constant_negbin_1e-2/size_mixed/K20_N10_G1000_T10'
+        - 'simulated/constant_gaussian/size_mixed/K20_N10_G1000_T10'
+        - 'simulated/constant_gaussian_100/size_mixed/K20_N10_G1000_T10'
+        - 'simulated/constant_gaussian_300/size_mixed/K20_N10_G1000_T10'
+        - 'simulated/constant/size_mixed/K20_N10_G1000_T10'
+    LARGE:
+      datasets:
+        # Different N, T, G
+        - 'simulated/constant_negbin/size_mixed/K20_N10_G1000_T10'
+        - 'simulated/constant_negbin/size_mixed/K20_N10_G5000_T10'
+        - 'simulated/constant_negbin/size_mixed/K20_N300_G10000_T20'
+        - 'simulated/constant_negbin/size_mixed/K100_N300_G10000_T20'
+        - 'simulated/constant_negbin/size_mixed/K400_N300_G10000_T20'
+    SIZE:
+      datasets:
+        # Different N, T, G
+        - 'simulated/constant_negbin/size_mixed/K20_N10_G100_T10'
+        - 'simulated/constant_negbin/size_mixed/K20_N50_G1000_T2'
+        - 'simulated/constant_negbin/size_mixed/K20_N10_G1000_T10'
+        - 'simulated/constant_negbin/size_mixed/K20_N10_G1000_T20'
+        - 'simulated/constant_negbin/size_mixed/K20_N100_G1000_T10'
+        - 'simulated/constant_negbin/size_mixed/K20_N500_G1000_T10'
+        - 'simulated/constant_negbin/size_mixed/K20_N10_G5000_T10'
+        - 'simulated/constant_negbin/size_mixed/K20_N300_G10000_T20'
+    SHIFT_SCALE:
+      datasets:
+        # Normal model
+        - 'simulated/constant_negbin/size_mixed/K20_N10_G1000_T10'
+        # Constant genes
+        - 'simulated/shift_scale_0/size_mixed/K20_N10_G1000_T10'
+        # Shift only
+        - 'simulated/shift_scale_1/size_mixed/K20_N10_G1000_T10'
+        # Scale only
+        - 'simulated/shift_scale_0_5e-1/size_mixed/K20_N10_G1000_T10'
+        # Shift and scale
+        - 'simulated/shift_scale_1_5e-1/size_mixed/K20_N10_G1000_T10'
+
+PARAM_SWEEP:
+  datasets:
+    # Standard size is N10_G1000_T10
+    - 'simulated/constant_negbin/size_mixed/K20_N10_G1000_T10'
+    - 'simulated/constant/size_mixed_large/K10_N10_G1000_T10'
+    - 'simulated/constant_gaussian/size_mixed_small/K50_N10_G1000_T10'
+
+  sim_seed: 1234
+  run_seeds: [6363, 4321, 6546, 2323, 1024]
+
+  K: [5, 10, 20, 30, 50, 70, 100]
+  K_SWEEP:
+    NORMAL: [20, 50]                  # values of K to use for each adjustment of parameters
+    OVERESTIMATE: [30, 70]     # as above, but for methods which require overestimate
+
+  BicMix:
+    qnorm: [0]
+    a: [0.1, 0.2, 0.7, 0.9]     # default a=0.5,b=0.5 to give horseshoe prior
+    b: [0.1, 0.2, 0.7, 0.9]
+
+  FABIA:
+    alpha: [0.1, 0.3, 0.5, 1]       # default 0.01
+    spz: [0.8, 1, 1.5, 2]           # default 0.5
+    spl: [0.1, 0.5, 1.5, 2]         # default 0
+    eps: [1e-7, 1e-2, 5e-1]         # default 1e-4
+    thresZ: [0.05, 0.2, 0.3, 0.8]   # default 0.5
+    rescale_l: [1]                  # default 0
+
+  Plaid:
+    row_release: [0.5, 0.6] # default 0.7 - range is [0.5, 0.7]
+    col_release: [0.5, 0.6] # default 0.7 - range is [0.5, 0.7]
+
+  SDA:
+    num_dense_comps: [1, 3, 5, 10]
+    step_size: [1e-6, 1e-5, 1e-3, 1e-2] # default 1e-4
+    conv_crit: [1e-2, 1e-3, 1e-4, 1e-5] # default 0
+
+  # Multicluster has no accessible parameters
+  MultiCluster: {}
+
+  nsNMF:
+    theta: [0.2, 0.7, 0.8, 1]       # default 0.5
+
+  SNMF:
+    beta: [1e-6, 1e-3, 1e-2, 1e-1]  # default 1e-4
+
+  SSLB:
+    d: [0.2, 0.5, 0.8]        # Try Pitman-Yor prior (IBP=1, d!=0)
+    IBP: [0]                  # Try Beta-Binomial prior
+    # commonly used values are 1/K, 1/K*N and 1/K*G
+    # We will use K_init=30 by default, so 1/K is roughly 3e-3
+    # N will be 100, G will be 1000
+    alpha: [3e-1, 3e-3, 3e-5, 3e-6]
+    a: [3e-1, 3e-3, 3e-5, 3e-6]
+    b: [3e-1, 3e-3, 3e-5, 3e-6]
+
+PARAMETERS:
+  BicMix:
+    max_iter: 5000
+    K_init: 50
+    tol: 0.000001
+    a: 0.5
+    b: 0.5
+    qnorm: 1
+    seed: 123456
+
+  FABIA:
+    random_state: 123456
+    n_clusters: 20
+    n_iter: 500
+    alpha: 0.01
+    spz: 0.5
+    spl: 0
+    eps: 0.0001
+    thresZ: 0.5
+    rescale_l: 0
+
+  Plaid:
+    K_init: 20
+    col_release: 0.7
+    row_release: 0.7
+    seed: 123456
+    iter_startup: 5
+    iter_layer: 10
+
+  MultiCluster:
+    K_init: 50
+
+  nsNMF:
+    seed: 123456
+    theta: 0.5
+    rank: 20
+    max_iter: 30
+
+  SDA:
+    num_comps: 50
+    set_seed: 123456 654321
+    max_iter: 2000
+    num_dense: 0
+    step_size: 1e-4
+    conv_crit: 0
+
+  SNMF:
+    rank: 30
+    seed_method: 'random'
+    max_iter: 30
+    beta: 0.00001
+    i_conv: 10
+    w_min_change: 0
+    seed: 123456
+
+  SSLB:
+    K_init: 30
+    lambda0s: [1, 5, 10, 50, 100, 500, 1000, 10000, 100000, 1000000, 10000000]
+    lambda0_tildes: [1, 5, 10, 50, 100, 500, 1000, 10000, 100000, 1000000, 10000000]
+    lambda1: 1
+    lambda1_tilde: 1
+    alpha: NULL     # Will be set to 1/N in script
+    a: NULL         # Will be set to 1/K in script
+    b: NULL         # Will be set to 1/K in script
+    d: 0
+    EPSILON: 0.01
+    IBP: 1
+    seed: 123456
+    max_iter: 500
+

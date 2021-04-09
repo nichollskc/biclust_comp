@@ -1,0 +1,18 @@
+rule presnell_summary:
+    input:
+        sample_info="data/real/presnell/{dataset}/tensor/sample_info.txt",
+    output:
+        pdf="plots/presnell/summary/{method}/real/presnell/{dataset}/tensor/{run_id}.pdf",
+    run:
+        import biclust_comp.analysis.presnell_plots as pres
+
+        pres.presnell_summary(f"{wildcards.method}/real/presnell/{wildcards.dataset}/tensor/{wildcards.run_id}",
+                              output.pdf,
+                              input.sample_info)
+
+rule presnell_summaries:
+    input:
+        expand("plots/presnell/summary/{method}/real/presnell/deseq_sf/raw/expressed/tensor/run_seed_8080_K_60.pdf",
+               method=[m for m in config['METHODS'] if m != 'MultiCluster']),
+        "plots/presnell/summary/MultiCluster/real/presnell/deseq_sf/raw/expressed/tensor/run_seed_1024_K_60.pdf",
+        "plots/presnell/summary/BicMix/real/presnell/deseq_sf/raw/expressed/tensor/run_seed_8080_K_60_qnorm_0.pdf",

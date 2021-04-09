@@ -1,0 +1,320 @@
+ version: 2.1
+ jobs:
+   build:
+     # Use a docker image with miniconda already installed
+     docker:
+       - image: continuumio/miniconda3
+
+     steps:
+       # Checkout git code
+       - checkout
+
+       - run:
+           name: setup
+           command: |
+             mkdir artifacts
+             mkdir -p tests/test-results
+             # Tell R to use the provided compilers
+             mkdir ~/.R
+             echo 'CC=x86_64-conda_cos6-linux-gnu-cc' > ~/.R/Makevars
+             echo 'CXX=x86_64-conda_cos6-linux-gnu-c++' >> ~/.R/Makevars
+             echo 'CXX11STD= -std=gnu++11' >> ~/.R/Makevars
+             # Tell CircleCI to set PYTHONPATH at the start of each run step
+             echo "export PYTHONPATH=${PYTHONPATH:+${PYTHONPATH}:}$(pwd)" >> $BASH_ENV
+
+             echo "export TAR=/bin/tar " >> $BASH_ENV
+           when: always
+
+       # If possible, restore a cache of the required packages
+       # If either the install_dependencies script or the conda environment yml file has changed
+       # then we need to reinstall the packages from scratch
+       - restore_cache:
+           key: v2-dependencies-{{ checksum "install_dependencies.sh" }}-{{ checksum "environment-minimal.yml" }}-{{ checksum "~/.R/Makevars" }}
+
+       # Install the packages using the script,
+       # which first checks if the conda environment has already been restored
+       - run:
+           name: install dependencies
+           command: |
+             echo $TAR
+             conda info -a
+             if [[ $(conda list -n biclustering_comparison) ]]
+             then
+                 echo "Conda environment exists, nothing more to do"
+             else
+                 echo "Need to install conda environment, installing mamba first - mamba is faster and more reliable than conda"
+                 conda install mamba -c conda-forge
+             fi
+
+             source ./install_dependencies.sh
+             source activate biclustering_comparison
+             conda list
+             conda env export | tee artifacts/conda_environment_export.yml
+
+       # Save the packages to the cache so we can save build time next time
+       - save_cache:
+          key: v2-dependencies-{{ checksum "install_dependencies.sh" }}-{{ checksum "environment-minimal.yml" }}-{{ checksum "~/.R/Makevars" }}
+          paths:
+            - "/opt/conda/envs/biclustering_comparison"
+            - "BicMix"
+
+       - run:
+           name: snakemake dryrun
+           command: |
+             source activate biclustering_comparison
+             # Make sure we report the result of tests even if we fail
+             set +e
+             mkdir -p tests/test-results/snakemake_dryrun
+             snakemake --jobs 1 --dry-run --quiet 2>&1 | tee artifacts/snakemake_dryrun.log
+
+             # Recover the exit code, pass it to the script that builds results.xml file
+             SNAKEMAKE_RC=$?
+             python3 biclust_comp/tests/report_snakemake_tests.py --exit_code $SNAKEMAKE_RC --logfile artifacts/snakemake_dryrun.log --snakemake_command 'snakemake --dry-run' --test_name 'snakemake_dryrun'
+             # Exit with the exit code that snakemake gave
+             (exit $SNAKEMAKE_RC)
+           when: always
+
+       - run:
+           name: snakemake tests
+           command: |
+             source activate biclustering_comparison
+             # Make sure we report the result of tests even if we fail
+             set +e
+             mkdir -p tests/test-results/snakemake_test
+             snakemake --jobs 1 --configfile biclust_comp/workflows/snakemake_testing_config.yml biclust_comp/workflows/snakemake_circleci_config.yml --keep-going short_test 2>&1 | tee artifacts/snakemake_test.log
+
+             # Recover the exit code, pass it to the script that builds results.xml file
+             SNAKEMAKE_RC=$?
+             python3 biclust_comp/tests/report_snakemake_tests.py --exit_code $SNAKEMAKE_RC --logfile artifacts/snakemake_test.log --snakemake_command 'snakemake --keep-going test' --test_name 'snakemake_test'
+             # Exit with the exit code that snakemake gave
+             (exit $SNAKEMAKE_RC)
+           when: always
+
+       - run:
+           name: python tests
+           command: |
+             source activate biclustering_comparison
+             mkdir -p tests/test-results/nosetests
+             find tests
+             ls -al tests/test-results/snakemake_test
+             # Exclude MultiCluster testing, as we don't run Matlab on CircleCI tests
+             #    so MultiCluster won't have run
+             # Also exclude BicMix, as it is slow to run
+             nosetests biclust_comp/tests --eval-attr 'not matlab and not bicmix and not sslb and not fabia' --cover-package biclust_comp --cover-xml --with-xunit --xunit-file=tests/test-results/nosetests/results.xml --verbose 2>&1 | tee artifacts/nosetests.log
+           when: always
+
+       - run:
+           name: snakemake long tests
+           command: |
+             source activate biclustering_comparison
+             # Make sure we report the result of tests even if we fail
+             set +e
+             mkdir -p tests/test-results/snakemake_longtest
+             snakemake --jobs 1 --configfile biclust_comp/workflows/snakemake_testing_config.yml biclust_comp/workflows/snakemake_circleci_config.yml --keep-going long_test 2>&1 | tee artifacts/snakemake_longtest.log
+
+             # Recover the exit code, pass it to the script that builds results.xml file
+             SNAKEMAKE_RC=$?
+             python3 biclust_comp/tests/report_snakemake_tests.py --exit_code $SNAKEMAKE_RC --logfile artifacts/snakemake_longtest.log --snakemake_command 'snakemake --keep-going long_test' --test_name 'snakemake_longtest'
+             cp analysis/accuracy/thresholded_results.csv artifacts/
+             cp analysis/accuracy/thresholded_results_K_SWEEP.csv artifacts/
+             cp analysis/accuracy/combined_accuracy_ext_K_SWEEP.csv artifacts/
+
+             find ./ > artifacts/all_files.txt
+
+             # Exit with the exit code that snakemake gave
+             (exit $SNAKEMAKE_RC)
+           when: always
+
+       - run:
+           name: pylint
+           command: |
+             source activate biclustering_comparison
+             pylint -E biclust_comp/ --rcfile .pylintrc
+           when: always
+
+       - run:
+           name: store test XML files
+           command: |
+             find tests/test-results
+             ls -als tests/test-results/*/*.xml
+             cat tests/test-results/*/*.xml | tee artifacts/test-results.xml
+           when: always
+
+       - run:
+           name: store log files
+           command: |
+             find logs
+             cp -r logs/ artifacts/logs
+           when: always
+
+       - store_artifacts:
+           path: artifacts
+
+       - store_test_results:
+           path: tests/test-results
+
+   test_zenodo:
+     parameters:
+       data_location:
+         type: string
+         default: "foo"
+       hash:
+         type: string
+         default: "foo"
+       zenodo_version:
+         type: string
+         default: "foo"
+     # Use a docker image with miniconda already installed
+     # Use a docker image with miniconda already installed
+     docker:
+       - image: continuumio/miniconda3
+
+     steps:
+       # Checkout git code
+       - checkout
+
+       - run:
+           name: setup
+           command: |
+             echo << parameters.zenodo_version >>
+
+             apt-get update
+             apt-get install unzip
+             mkdir artifacts
+           when: always
+
+       - run:
+          name: fetch_data
+          command: |
+            wget --output-document=biclust_comp_results.zip << parameters.data_location >>
+            echo "Check the hashes match. Expected is:"
+            echo << parameters.hash >>
+            echo "Hash of zip file is:"
+            md5sum biclust_comp_results.zip
+
+            echo "Check using md5sum:"
+            md5sum -c "biclust_comp/tests/<< parameters.zenodo_version >>.checksum"
+            unzip biclust_comp_results.zip
+            find analysis/
+
+       # If possible, restore a cache of the required packages
+       # If the conda environment yml file has changed
+       # then we need to reinstall the packages from scratch
+       - restore_cache:
+           key: v1-dependencies-{{ checksum "environment-plots.yml" }}
+
+       # Install the packages using the script,
+       # which first checks if the conda environment has already been restored
+       - run:
+           name: install dependencies
+           command: |
+             echo $TAR
+             conda info -a
+             if [[ $(conda list -n biclust_comp_plots) ]]
+             then
+                 echo "Conda environment exists, nothing more to do"
+             else
+                 echo "Need to install conda environment, installing mamba first - mamba is faster and more reliable than conda"
+                 conda install mamba -c conda-forge
+                 mamba env create -f environment-plots.yml
+             fi
+
+             source activate biclust_comp_plots
+             conda list
+             conda env export | tee artifacts/conda_environment_export.yml
+
+       # Save the packages to the cache so we can save build time next time
+       - save_cache:
+          key: v1-dependencies-{{ checksum "environment-plots.yml" }}
+          paths:
+            - "/opt/conda/envs/biclust_comp_plots"
+
+       - run:
+           name: all_plots dryrun
+           command: |
+             source activate biclust_comp_plots
+             # Make sure we report the result of tests even if we fail
+             set +e
+             mkdir -p tests/test-results/snakemake_dryrun
+             snakemake --jobs 1 --reason --dry-run all_plots | tee artifacts/snakemake_dryrun.log
+
+             # Recover the exit code, pass it to the script that builds results.xml file
+             SNAKEMAKE_RC=$?
+             python3 biclust_comp/tests/report_snakemake_tests.py --exit_code $SNAKEMAKE_RC --logfile artifacts/snakemake_dryrun.log --snakemake_command 'snakemake --dry-run' --test_name 'snakemake_dryrun'
+             # Exit with the exit code that snakemake gave
+             (exit $SNAKEMAKE_RC)
+           when: always
+
+       - run:
+           name: all_plots
+           command: |
+             source activate biclust_comp_plots
+             # Make sure we report the result of tests even if we fail
+             set +e
+             mkdir -p tests/test-results/snakemake_plots
+
+             echo "Checking for any rules we don't want to run"
+             grep -F -f biclust_comp/tests/non_plot_rules.txt artifacts/snakemake_dryrun.log
+             GREP_RC=$?
+             echo "Grep complete"
+             if [ $GREP_RC -eq 0 ];
+             then
+                echo "Found matches for rules we don't want to run! Aborting!"
+                RC=1
+             else
+                echo "Looks like we won't accidentally run the whole workflow!"
+                snakemake --keep-going --jobs 8 all_plots | tee artifacts/snakemake_plots.log
+                SNAKEMAKE_RC=$?
+                python3 biclust_comp/tests/report_snakemake_tests.py --exit_code $SNAKEMAKE_RC --logfile artifacts/snakemake_plots.log --snakemake_command 'snakemake all_plots' --test_name 'snakemake_plots'
+                RC=$SNAKEMAKE_RC
+
+                # If we fail, rerun but go slower this time so it's easier to read the logs
+                if [ $SNAKEMAKE_RC -ne 0 ]
+                then
+                    mkdir -p tests/test-results/snakemake_plots_slow
+                    snakemake --keep-going --jobs 1 all_plots | tee artifacts/snakemake_plots_slow.log
+                    SNAKEMAKE_RC=$?
+                    python3 biclust_comp/tests/report_snakemake_tests.py --exit_code $SNAKEMAKE_RC --logfile artifacts/snakemake_plots_slow.log --snakemake_command 'snakemake all_plots' --test_name 'snakemake_plots_slow'
+                fi
+
+                cp -r plots artifacts/
+             fi
+
+             (exit $RC)
+
+       - run:
+           name: store test XML files
+           command: |
+             find tests/test-results
+             ls -als tests/test-results/*/*.xml
+             cat tests/test-results/*/*.xml | tee artifacts/test-results.xml
+           when: always
+
+       - run:
+           name: store log files
+           command: |
+             find logs
+             cp -r logs/ artifacts/logs
+           when: always
+
+       - store_artifacts:
+           path: artifacts
+
+       - store_test_results:
+           path: tests/test-results
+
+ workflows:
+  full:
+    jobs:
+      - build
+      - test_zenodo:
+          filters:
+            branches:
+              only:
+                - /zenodo.*/
+                - master
+                - dev
+          # v2.0.2
+          data_location: "https://www.dropbox.com/s/15i3w4tton7fm75/biclust_comp_results.zip?dl=0"
+          hash: "c4cc8269b090dd35767c9411043cfbd7"
+          zenodo_version: "zenodo_v2.0.2"

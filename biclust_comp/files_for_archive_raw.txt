@@ -1,0 +1,15 @@
+% Not enough to create all plots from using snakemake
+% Results from IMPC
+analysis/IMPC/combined_error_ext.tsv
+%
+% Results from simulated datasets - all datasets used in main analysis
+analysis/accuracy/combined_accuracy_ext.csv
+analysis/accuracy/combined_accuracy_ext_BASE.csv
+analysis/accuracy/combined_accuracy_ext_K_SWEEP.csv
+analysis/accuracy/combined_accuracy_ext_LARGE.csv
+analysis/accuracy/combined_accuracy_ext_NOISE.csv
+analysis/accuracy/combined_accuracy_ext_OTHER_K.csv
+analysis/accuracy/combined_accuracy_ext_SIMPLE.csv
+analysis/accuracy/combined_accuracy_ext_SIZE.csv
+analysis/accuracy/combined_accuracy_ext_SPARSITY.csv
+analysis/accuracy/combined_accuracy_ext_SHIFT_SCALE.csv

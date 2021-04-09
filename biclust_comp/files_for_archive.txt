@@ -1,0 +1,140 @@
+% Construct zip file with
+%   cat biclust_comp/files_for_archive.txt | grep --invert-match '%' | zip biclust_comp_results.zip -@ -r
+% all_results_expected contains all runs, at all threshold levels, with multiple values of K_init
+% thresholded_results contains all runs, at only 'optimal' threshold level, with multiple values of K_init
+% restricted_results contains all runs, at only 'optimal' threshold level, with only 'optimal' value of K_init
+% 'optimal' refers to the value chosen to be most suitable for analysis, see the paper for further details
+%   on how this was chosen
+% All these dataframes contain rows for any runs that failed, these have the 'run_complete' variable set to False
+%   These correspond to runs that crashed, failed to complete within the time limit, ran out of memory or returned 0 factors
+%   They roughly correspond to rows with recovered_K either NA or 0.
+%
+% Results from IMPC
+analysis/IMPC/all_results_expected.csv
+analysis/IMPC/thresholded_results.csv
+analysis/IMPC/restricted_results.csv
+%
+% Results from simulated datasets - all datasets used in main analysis
+analysis/accuracy/all_results_expected.csv
+analysis/accuracy/thresholded_results.csv
+analysis/accuracy/restricted_results.csv
+%
+% Results from simulated datasets for each group of datasets
+analysis/accuracy/all_results_expected_K_SWEEP.csv
+analysis/accuracy/all_results_expected_LARGE.csv
+analysis/accuracy/all_results_expected_NOISE.csv
+analysis/accuracy/all_results_expected_OTHER_K.csv
+analysis/accuracy/all_results_expected_SIMPLE.csv
+analysis/accuracy/all_results_expected_SIZE.csv
+analysis/accuracy/all_results_expected_SPARSITY.csv
+analysis/accuracy/all_results_expected_SHIFT_SCALE.csv
+analysis/accuracy/restricted_results_K_SWEEP.csv
+analysis/accuracy/restricted_results_LARGE.csv
+analysis/accuracy/restricted_results_NOISE.csv
+analysis/accuracy/restricted_results_OTHER_K.csv
+analysis/accuracy/restricted_results_SIMPLE.csv
+analysis/accuracy/restricted_results_SIZE.csv
+analysis/accuracy/restricted_results_SPARSITY.csv
+analysis/accuracy/restricted_results_SHIFT_SCALE.csv
+analysis/accuracy/thresholded_results_K_SWEEP.csv
+analysis/accuracy/thresholded_results_LARGE.csv
+analysis/accuracy/thresholded_results_NOISE.csv
+analysis/accuracy/thresholded_results_OTHER_K.csv
+analysis/accuracy/thresholded_results_SIMPLE.csv
+analysis/accuracy/thresholded_results_SIZE.csv
+analysis/accuracy/thresholded_results_SPARSITY.csv
+analysis/accuracy/thresholded_results_SHIFT_SCALE.csv
+%
+%
+% Baseline scores for simulated datasets
+analysis/accuracy/baseline_results.csv
+analysis/accuracy/baseline_results_K_SWEEP.csv
+analysis/accuracy/baseline_results_LARGE.csv
+analysis/accuracy/baseline_results_NOISE.csv
+analysis/accuracy/baseline_results_OTHER_K.csv
+analysis/accuracy/baseline_results_SIMPLE.csv
+analysis/accuracy/baseline_results_SIZE.csv
+analysis/accuracy/baseline_results_SPARSITY.csv
+analysis/accuracy/baseline_results_SHIFT_SCALE.csv
+%
+%
+% Recovery of individual factors in two sets of simulated datasets
+analysis/accuracy/factor_recovery_scores_BASE.csv
+analysis/accuracy/factor_recovery_scores_SPARSITY.csv
+analysis/accuracy/recovery_scores_factors_SPARSITY.csv
+analysis/accuracy/relevance_scores_factors_SPARSITY.csv
+%
+%
+% Factor sparsity information on SPARSITY simulated datasets - unthresholded
+analysis/accuracy/factor_info_sparsity_thresh_.csv
+% Factor sparsity information on SPARSITY simulated datasets - thresholded at 0.01 (except Plaid which can't be thresholded)
+analysis/accuracy/factor_info_sparsity_thresh_theoretical.csv
+%
+%
+% Overlap information
+analysis/accuracy/overlap_info.csv
+%
+%
+% Similarity between runs on IMPC datasets, only comparing runs from the same method
+analysis/IMPC/similarity_methods.csv
+%
+%
+% Number of unique factors and pathways recovered, along with other error data
+analysis/IMPC/restricted_results_with_num_unique_factors.csv
+%
+%
+% Proportion of each factor from IMPC datasets taken up by largest tissue
+analysis/IMPC/largest_tissue_prop_all.csv
+%
+%
+% X and B output files for each method in the Benaroya/Presnell dataset
+%
+% List of expected runids for IMPC datasets
+analysis/IMPC/expected_method_dataset_run_ids.txt
+%
+% List of expected runids for simulated datasets
+analysis/accuracy/expected_method_dataset_run_ids.txt
+%
+% Lists of expected runids for each group of simulated datasets
+analysis/accuracy/expected_method_dataset_run_ids_BASE.txt
+analysis/accuracy/expected_method_dataset_run_ids_K_SWEEP.txt
+analysis/accuracy/expected_method_dataset_run_ids_LARGE.txt
+analysis/accuracy/expected_method_dataset_run_ids_NOISE.txt
+analysis/accuracy/expected_method_dataset_run_ids_OTHER_K.txt
+analysis/accuracy/expected_method_dataset_run_ids_SIMPLE.txt
+analysis/accuracy/expected_method_dataset_run_ids_SIZE.txt
+analysis/accuracy/expected_method_dataset_run_ids_SPARSITY.txt
+analysis/accuracy/expected_method_dataset_run_ids_SHIFT_SCALE.txt
+%
+% File giving parameter values for different mdrs from parameter sweep
+%   Originally logs/snakemake_config/2020-03-13_18\:30\:03
+analysis/accuracy/snakemake_config_param_sweep.log
+%
+%
+% Benaroya data - raw and version used in paper
+data/real/presnell/raw/Y.txt
+data/real/presnell/raw/sample_info.txt
+data/real/presnell/deseq_sf/raw/expressed/tensor/Y.txt
+data/real/presnell/deseq_sf/raw/expressed/tensor/sample_info.txt
+data/real/presnell/log/expressed/tensor/Y.txt
+data/real/presnell/log/expressed/tensor/sample_info.txt
+%
+% Results used for plots
+results/MultiCluster/real/presnell/log/expressed/tensor/run_seed_1024_K_60/
+results/SSLB/real/presnell/log/expressed/tensor/run_seed_8080_K_60/
+results/FABIA/real/presnell/log/expressed/tensor/run_seed_8080_K_60/
+results/BicMix/real/presnell/log/expressed/tensor/run_seed_8080_K_60/
+results/BicMix/real/presnell/log/expressed/tensor/run_seed_8080_K_60_qnorm_0/
+results/Plaid/real/presnell/log/expressed/tensor/run_seed_8080_K_60/
+results/SDA/real/presnell/log/expressed/tensor/run_seed_8080_K_60/
+results/SNMF/real/presnell/log/expressed/tensor/run_seed_8080_K_60/
+results/nsNMF/real/presnell/log/expressed/tensor/run_seed_8080_K_60/
+results/MultiCluster/real/presnell/deseq_sf/raw/expressed/tensor/run_seed_1024_K_60/
+results/SSLB/real/presnell/deseq_sf/raw/expressed/tensor/run_seed_8080_K_60/
+results/FABIA/real/presnell/deseq_sf/raw/expressed/tensor/run_seed_8080_K_60/
+results/BicMix/real/presnell/deseq_sf/raw/expressed/tensor/run_seed_8080_K_60/
+results/BicMix/real/presnell/deseq_sf/raw/expressed/tensor/run_seed_8080_K_60_qnorm_0/
+results/Plaid/real/presnell/deseq_sf/raw/expressed/tensor/run_seed_8080_K_60/
+results/SDA/real/presnell/deseq_sf/raw/expressed/tensor/run_seed_8080_K_60/
+results/SNMF/real/presnell/deseq_sf/raw/expressed/tensor/run_seed_8080_K_60/
+results/nsNMF/real/presnell/deseq_sf/raw/expressed/tensor/run_seed_8080_K_60/

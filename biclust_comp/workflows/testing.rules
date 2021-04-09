@@ -1,0 +1,74 @@
+if 'TEST_DATASETS' in config:
+    TEST_DATASETS_DICT = config['TEST_DATASETS']
+    TEST_DATASET_METHOD_RUNIDS = [f"{method}/{dataset}/run_1"
+                                  for dataset in TEST_DATASETS_DICT.keys()
+                                  for method in TEST_DATASETS_DICT[dataset]]
+else:
+    TEST_DATASET_METHOD_RUNIDS = []
+
+rule test_simulate_datasets:
+    input:
+        expand("data/{dataset}/seed_1234/Y.txt",
+               dataset=['simulated/constant_gaussian_100/size_mixed/K20_N20_G1000_T20',
+                        'simulated/constant_negbin_1e-2/size_mixed/K20_N2_G10_T5',
+                        'simulated/constant/size_mixed/K20_N2_G10_T5',
+                        'simulated/constant/square_size_mixed/K20_N2_G10_T5',
+                        'simulated/constant_negbin_3e-1/size_mixed/K20_N2_G10_T5']),
+
+rule short_test:
+    input:
+        rules.test_simulate_datasets.input,
+        expand("results/{method_dataset_runid}/K.txt",
+               method_dataset_runid=TEST_DATASET_METHOD_RUNIDS),
+        rules.results_simulated_all.input,
+
+rule long_test:
+    input:
+        "analysis/accuracy/restricted_results.csv",
+        "analysis/accuracy/restricted_results_K_SWEEP.csv",
+
+rule test_generate_results:
+    input:
+        rules.short_test.input,
+        rules.impc_results.input,
+
+rule test:
+    input:
+        rules.long_test.input,
+        rules.impc_combined_analysis.input,
+
+rule generate_gaussian_test_data:
+    output:
+        Y="data/tests/simple_gaussian/Y.txt",
+        X_binary="data/tests/simple_gaussian/X_binary.txt",
+        B_binary="data/tests/simple_gaussian/B_binary.txt",
+        A_binary="data/tests/simple_gaussian/A_binary.txt",
+        Z_binary="data/tests/simple_gaussian/Z_binary.txt",
+        N="data/tests/simple_gaussian/N.txt",
+        K="data/tests/simple_gaussian/K.txt"
+    script:
+        f"{config['BICLUST_COMP_SCRIPTS']}/biclust_comp/tests/generate_gaussian_test_data.R"
+
+rule generate_negbin_test_data:
+    output:
+        Y="data/tests/simple_negbin/Y.txt",
+        X_binary="data/tests/simple_negbin/X_binary.txt",
+        B_binary="data/tests/simple_negbin/B_binary.txt",
+        A_binary="data/tests/simple_negbin/A_binary.txt",
+        Z_binary="data/tests/simple_negbin/Z_binary.txt",
+        N="data/tests/simple_negbin/N.txt",
+        K="data/tests/simple_negbin/K.txt"
+    script:
+        f"{config['BICLUST_COMP_SCRIPTS']}/biclust_comp/tests/generate_negbin_test_data.R"
+
+rule generate_multifactor_test_data:
+    output:
+        Y="data/tests/multifactor/Y.txt",
+        X="data/tests/multifactor/X.txt",
+        B="data/tests/multifactor/B.txt",
+        A="data/tests/multifactor/A.txt",
+        Z="data/tests/multifactor/Z.txt",
+        N="data/tests/multifactor/N.txt",
+        K="data/tests/multifactor/K.txt"
+    script:
+        f"{config['BICLUST_COMP_SCRIPTS']}/biclust_comp/tests/generate_multifactor_test_data.R"
